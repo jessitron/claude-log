@@ -95,10 +95,29 @@ export function generateHtml(panels: Panel[], title: string): string {
   <div class="comic-strip">
     <div class="comic-title">
       <h1>${escapeHtml(title)}</h1>
+      <div class="toggle-bar">
+        <button id="toggle-actions" class="toggle-btn">Show all actions</button>
+        <button id="toggle-outputs" class="toggle-btn">Show all outputs</button>
+      </div>
     </div>
 ${panelHtml}
     <div class="comic-end">fin.</div>
   </div>
+  <script>
+    function makeToggle(buttonId, selector, showText, hideText) {
+      const btn = document.getElementById(buttonId);
+      let expanded = false;
+      btn.addEventListener('click', function() {
+        expanded = !expanded;
+        btn.textContent = expanded ? hideText : showText;
+        document.querySelectorAll(selector).forEach(function(el) {
+          el.open = expanded;
+        });
+      });
+    }
+    makeToggle('toggle-actions', 'details.montage-burst', 'Show all actions', 'Hide all actions');
+    makeToggle('toggle-outputs', 'details.tool-output-details', 'Show all outputs', 'Hide all outputs');
+  </script>
 </body>
 </html>
 `;

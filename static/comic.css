@@ -39,6 +39,30 @@ body {
   letter-spacing: 2px;
 }
 
+.toggle-bar {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.toggle-btn {
+  background: #0f3460;
+  border: 1px solid #3282b8;
+  color: #7ec8e3;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.toggle-btn:hover {
+  background: #1a4a7a;
+  color: #b8e0f0;
+}
+
 /* Panels — the basic building block */
 .panel {
   padding: 16px 20px;
