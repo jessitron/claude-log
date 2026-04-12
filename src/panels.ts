@@ -27,7 +27,8 @@ export interface Panel {
 function isSkippable(record: ConversationRecord): boolean {
   if (record.type === "progress") return true;
   if (record.type === "file-history-snapshot") return true;
-  if (record.type === "queue-operation") return true;
+  // queue-operation "enqueue" = human typed while Claude was working. Show those!
+  if (record.type === "queue-operation" && record.raw.operation !== "enqueue") return true;
   if (record.type === "attachment") return true;
   // user records that are tool results or meta (system reminders, etc.)
   if (record.type === "user" && record.raw.toolUseResult) return true;
@@ -112,6 +113,20 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
 
   for (let i = 0; i < visible.length; i++) {
     const record = visible[i];
+
+    // Enqueued messages: human typing while Claude works
+    if (record.type === "queue-operation") {
+      const content = record.raw.content;
+      if (typeof content === "string" && content.trim()) {
+        // Don't flush montage — this happened *during* the action!
+        panels.push({
+          type: "human-speech",
+          lines: [content],
+          lineNumbers: [record.lineNumber],
+        });
+      }
+      continue;
+    }
 
     if (record.type === "user") {
       flushMontage();
