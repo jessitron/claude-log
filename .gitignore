@@ -1,3 +1,4 @@
 .claude/settings.local.json
+.be
 node_modules/
 dist/
