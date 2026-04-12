@@ -221,6 +221,36 @@ body {
   padding-left: 8px;
 }
 
+.tool-output-details {
+  margin-top: 4px;
+}
+
+.tool-output-toggle {
+  cursor: pointer;
+  color: #534b8a;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.tool-output-toggle:hover {
+  color: #a89fd4;
+}
+
+.tool-output {
+  background: #0d0d1a;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  padding: 8px;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #8a8aaa;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
 /* === Narrator === */
 .narrator {
   align-self: center;

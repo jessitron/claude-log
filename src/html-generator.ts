@@ -46,7 +46,16 @@ function renderPanel(panel: Panel): string {
           const lines = d.summary.split("\n");
           const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}`;
           const rest = lines.slice(1).map((l) => `<span class="tool-command">${escapeHtml(l)}</span>`);
-          return `<li>${[first, ...rest].join("\n              ")}</li>`;
+          const mainContent = [first, ...rest].join("\n              ");
+          if (d.output) {
+            const truncatedOutput = d.output.length > 2000 ? d.output.slice(0, 2000) + "\n…" : d.output;
+            return `<li>${mainContent}
+              <details class="tool-output-details">
+                <summary class="tool-output-toggle">output</summary>
+                <pre class="tool-output">${escapeHtml(truncatedOutput)}</pre>
+              </details></li>`;
+          }
+          return `<li>${mainContent}</li>`;
         })
         .join("\n            ");
       const summary = panel.lines.map((l) => escapeHtml(l)).join("  ");

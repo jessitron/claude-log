@@ -19,6 +19,7 @@ export type PanelType =
 export interface ToolDetail {
   name: string;
   summary: string; // short description of what the tool did
+  output?: string; // tool result output, if available
 }
 
 export interface Panel {
@@ -121,15 +122,44 @@ function assistantBlockType(record: ConversationRecord): string | null {
   return blocks[0].type;
 }
 
+// Build a map from tool_use id → result text, so we can show output in montages.
+function buildToolResultIndex(records: ConversationRecord[]): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const record of records) {
+    if (record.type !== "user" || !record.raw.toolUseResult) continue;
+    const msg = record.raw.message as { content?: unknown };
+    if (!msg?.content) continue;
+    if (Array.isArray(msg.content)) {
+      for (const block of msg.content) {
+        if ((block as any).type === "tool_result" && (block as any).tool_use_id) {
+          const id = (block as any).tool_use_id;
+          const content = (block as any).content;
+          if (typeof content === "string") {
+            index.set(id, content);
+          } else if (Array.isArray(content)) {
+            const text = content
+              .filter((c: any) => c.type === "text")
+              .map((c: any) => c.text || "")
+              .join("\n");
+            if (text) index.set(id, text);
+          }
+        }
+      }
+    }
+  }
+  return index;
+}
+
 export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
   const panels: Panel[] = [];
+  const toolResults = buildToolResultIndex(records);
 
   // Filter to just the records we care about, so index-based look-ahead is clean.
   const visible = records.filter((r) => !isSkippable(r));
 
   // We accumulate tool_use blocks into an action montage.
   // When we hit something that isn't a tool_use, we flush the montage.
-  let pendingTools: { name: string; summary: string; lineNumber: number }[] = [];
+  let pendingTools: { name: string; summary: string; output?: string; lineNumber: number }[] = [];
 
   function flushMontage() {
     if (pendingTools.length === 0) return;
@@ -145,6 +175,7 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
     const toolDetails = pendingTools.map((t) => ({
       name: t.name,
       summary: t.summary,
+      output: t.output,
     }));
     panels.push({
       type: "action-montage",
@@ -236,7 +267,9 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
         const toolName = (block as any).name || "unknown_tool";
         const input = (block as any).input || {};
         const summary = summarizeTool(toolName, input);
-        pendingTools.push({ name: toolName, summary, lineNumber: record.lineNumber });
+        const toolId = (block as any).id as string | undefined;
+        const output = toolId ? toolResults.get(toolId) : undefined;
+        pendingTools.push({ name: toolName, summary, output, lineNumber: record.lineNumber });
       }
       continue;
     }
