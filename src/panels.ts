@@ -73,8 +73,18 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen - 1) + "…";
 }
 
+// What type of content does this assistant record's single block carry?
+function assistantBlockType(record: ConversationRecord): string | null {
+  const blocks = extractAssistantBlocks(record);
+  if (blocks.length === 0) return null;
+  return blocks[0].type;
+}
+
 export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
   const panels: Panel[] = [];
+
+  // Filter to just the records we care about, so index-based look-ahead is clean.
+  const visible = records.filter((r) => !isSkippable(r));
 
   // We accumulate tool_use blocks into an action montage.
   // When we hit something that isn't a tool_use, we flush the montage.
@@ -100,8 +110,8 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
     pendingTools = [];
   }
 
-  for (const record of records) {
-    if (isSkippable(record)) continue;
+  for (let i = 0; i < visible.length; i++) {
+    const record = visible[i];
 
     if (record.type === "user") {
       flushMontage();
@@ -122,31 +132,49 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
 
     if (record.type === "assistant") {
       const blocks = extractAssistantBlocks(record);
-      for (const block of blocks) {
-        if (block.type === "text") {
+      const block = blocks[0]; // one block per record in practice
+      if (!block) continue;
+
+      if (block.type === "text") {
+        const text = (block as any).text || "";
+        if (!text.trim()) continue;
+
+        // Heuristic: short text followed by a tool_use record is inner monologue,
+        // not real dialogue. "Let me read the file." → thought bubble.
+        const nextRecord = visible[i + 1];
+        const followedByTool =
+          nextRecord?.type === "assistant" &&
+          assistantBlockType(nextRecord) === "tool_use";
+        const isShort = text.trim().length < 150;
+
+        if (isShort && followedByTool) {
           flushMontage();
-          const text = (block as any).text || "";
-          if (text.trim()) {
-            panels.push({
-              type: "claude-speech",
-              lines: [text],
-              lineNumbers: [record.lineNumber],
-            });
-          }
-        } else if (block.type === "thinking") {
+          panels.push({
+            type: "claude-think",
+            lines: [text.trim()],
+            lineNumbers: [record.lineNumber],
+          });
+        } else {
           flushMontage();
-          const thinking = (block as any).thinking || "";
-          if (thinking.trim()) {
-            panels.push({
-              type: "claude-think",
-              lines: [truncate(thinking, 300)],
-              lineNumbers: [record.lineNumber],
-            });
-          }
-        } else if (block.type === "tool_use") {
-          const toolName = (block as any).name || "unknown_tool";
-          pendingTools.push({ name: toolName, lineNumber: record.lineNumber });
+          panels.push({
+            type: "claude-speech",
+            lines: [text],
+            lineNumbers: [record.lineNumber],
+          });
         }
+      } else if (block.type === "thinking") {
+        flushMontage();
+        const thinking = (block as any).thinking || "";
+        if (thinking.trim()) {
+          panels.push({
+            type: "claude-think",
+            lines: [truncate(thinking, 300)],
+            lineNumbers: [record.lineNumber],
+          });
+        }
+      } else if (block.type === "tool_use") {
+        const toolName = (block as any).name || "unknown_tool";
+        pendingTools.push({ name: toolName, lineNumber: record.lineNumber });
       }
       continue;
     }
