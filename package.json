@@ -5,7 +5,9 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
-    "parse": "tsc && node dist/main.js"
+    "parse": "tsc && node dist/main.js",
+    "explore": "tsc && node dist/explore.js",
+    "show": "tsc && node dist/show.js"
   },
   "keywords": [],
   "author": "",
