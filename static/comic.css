@@ -1,0 +1,229 @@
+/* Webtoon-style comic strip for Claude Code conversations */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #1a1a2e;
+  color: #eee;
+  font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', cursive, sans-serif;
+  min-height: 100vh;
+}
+
+.comic-strip {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Title */
+.comic-title {
+  text-align: center;
+  padding: 30px 20px;
+  background: #16213e;
+  border: 3px solid #e94560;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.comic-title h1 {
+  font-size: 1.8rem;
+  color: #e94560;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* Panels — the basic building block */
+.panel {
+  padding: 16px 20px;
+  border-radius: 12px;
+  position: relative;
+}
+
+/* === Human speech === */
+.human-speech {
+  align-self: flex-start;
+  max-width: 85%;
+}
+
+.character-label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+  padding-left: 12px;
+  opacity: 0.7;
+}
+
+.speech-bubble {
+  padding: 14px 18px;
+  border-radius: 18px;
+  position: relative;
+  line-height: 1.5;
+}
+
+.human-bubble {
+  background: #0f3460;
+  border: 2px solid #3282b8;
+  color: #e8e8e8;
+}
+
+.human-bubble::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: -10px;
+  border: 6px solid transparent;
+  border-right-color: #3282b8;
+}
+
+/* === Claude speech === */
+.claude-speech {
+  align-self: flex-end;
+  max-width: 85%;
+}
+
+.claude-bubble {
+  background: #1a1a40;
+  border: 2px solid #e94560;
+  color: #f0f0f0;
+}
+
+.claude-bubble::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  right: -10px;
+  border: 6px solid transparent;
+  border-left-color: #e94560;
+}
+
+.speech-bubble p {
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.speech-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+/* === Thinking === */
+.claude-think {
+  align-self: flex-end;
+  max-width: 75%;
+}
+
+.thought-bubble {
+  background: #16213e;
+  border: 2px dashed #534b8a;
+  border-radius: 24px;
+  padding: 12px 18px;
+  color: #a89fd4;
+  font-style: italic;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  position: relative;
+}
+
+.thought-bubble::before {
+  content: '💭';
+  position: absolute;
+  top: -14px;
+  right: 16px;
+  font-size: 1.2rem;
+}
+
+.thought-bubble p {
+  margin-bottom: 6px;
+}
+
+.thought-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+/* === Action Montage === */
+.action-montage {
+  align-self: center;
+  width: 90%;
+}
+
+.montage-burst {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border: 3px solid #e94560;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  position: relative;
+}
+
+.montage-burst::before {
+  content: '⚡ ACTION ⚡';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #e94560;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 2px;
+  padding: 2px 12px;
+  border-radius: 4px;
+}
+
+.tool-badge {
+  display: inline-block;
+  background: #0f3460;
+  border: 1px solid #3282b8;
+  color: #7ec8e3;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+}
+
+/* === Narrator === */
+.narrator {
+  align-self: center;
+  max-width: 90%;
+}
+
+.narrator-box {
+  background: #2d132c;
+  border: 1px solid #843b62;
+  border-radius: 4px;
+  padding: 10px 16px;
+  color: #d4a0c0;
+  font-style: italic;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.narrator-box p {
+  margin-bottom: 4px;
+}
+
+.narrator-box p:last-child {
+  margin-bottom: 0;
+}
+
+/* End marker */
+.comic-end {
+  text-align: center;
+  padding: 30px;
+  font-size: 1.4rem;
+  color: #534b8a;
+  font-style: italic;
+}

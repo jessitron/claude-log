@@ -1,0 +1,173 @@
+// Turn a flat list of conversation records into comic panels.
+//
+// Panel types:
+//   human-speech  — what the user typed (real prompts, not tool results or meta)
+//   claude-speech — what Claude said in text blocks
+//   claude-think  — thinking blocks (shown as thought bubbles)
+//   action-montage — a burst of tool uses grouped together
+//   narrator      — system events worth showing (errors, cost, etc.)
+
+import type { ConversationRecord, ContentBlock } from "./parser.js";
+
+export type PanelType =
+  | "human-speech"
+  | "claude-speech"
+  | "claude-think"
+  | "action-montage"
+  | "narrator";
+
+export interface Panel {
+  type: PanelType;
+  lines: string[];       // the text content to display
+  toolNames?: string[];  // for action-montage: which tools were used
+  lineNumbers: number[]; // source line numbers for traceability
+}
+
+// Records we skip entirely — they're noise for a comic
+function isSkippable(record: ConversationRecord): boolean {
+  if (record.type === "progress") return true;
+  if (record.type === "file-history-snapshot") return true;
+  if (record.type === "queue-operation") return true;
+  if (record.type === "attachment") return true;
+  // user records that are tool results or meta (system reminders, etc.)
+  if (record.type === "user" && record.raw.toolUseResult) return true;
+  if (record.type === "user" && record.raw.isMeta) return true;
+  return false;
+}
+
+function extractUserText(record: ConversationRecord): string {
+  const msg = record.raw.message as { content?: unknown } | undefined;
+  if (!msg?.content) return "";
+  if (typeof msg.content === "string") return msg.content;
+  if (Array.isArray(msg.content)) {
+    return msg.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text || "")
+      .join("\n");
+  }
+  return "";
+}
+
+function extractAssistantBlocks(record: ConversationRecord): ContentBlock[] {
+  const msg = record.raw.message as { content?: ContentBlock[] } | undefined;
+  if (!msg?.content || !Array.isArray(msg.content)) return [];
+  return msg.content;
+}
+
+// Interesting system records get narrator panels
+function isInterestingSystem(record: ConversationRecord): boolean {
+  const subtype = record.raw.subtype as string | undefined;
+  if (subtype === "api_error") return true;
+  if (subtype === "turn_duration") return false; // boring
+  if (subtype === "stop_hook_summary") return false;
+  // If it has user-visible content, show it
+  if (record.raw.content && typeof record.raw.content === "string") {
+    const content = record.raw.content;
+    if (content.length > 0 && content.length < 500) return true;
+  }
+  return false;
+}
+
+function truncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 1) + "…";
+}
+
+export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
+  const panels: Panel[] = [];
+
+  // We accumulate tool_use blocks into an action montage.
+  // When we hit something that isn't a tool_use, we flush the montage.
+  let pendingTools: { name: string; lineNumber: number }[] = [];
+
+  function flushMontage() {
+    if (pendingTools.length === 0) return;
+    const toolNames = pendingTools.map((t) => t.name);
+    // Deduplicate and count for display
+    const counts = new Map<string, number>();
+    for (const name of toolNames) {
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+    const lines = Array.from(counts.entries()).map(([name, count]) =>
+      count > 1 ? `${name} ×${count}` : name
+    );
+    panels.push({
+      type: "action-montage",
+      lines,
+      toolNames: Array.from(counts.keys()),
+      lineNumbers: pendingTools.map((t) => t.lineNumber),
+    });
+    pendingTools = [];
+  }
+
+  for (const record of records) {
+    if (isSkippable(record)) continue;
+
+    if (record.type === "user") {
+      flushMontage();
+      const text = extractUserText(record);
+      if (text.trim()) {
+        // Strip XML-looking command wrappers from slash commands
+        const cleaned = text.replace(/<\/?command-[^>]*>/g, "").trim();
+        if (cleaned) {
+          panels.push({
+            type: "human-speech",
+            lines: [cleaned],
+            lineNumbers: [record.lineNumber],
+          });
+        }
+      }
+      continue;
+    }
+
+    if (record.type === "assistant") {
+      const blocks = extractAssistantBlocks(record);
+      for (const block of blocks) {
+        if (block.type === "text") {
+          flushMontage();
+          const text = (block as any).text || "";
+          if (text.trim()) {
+            panels.push({
+              type: "claude-speech",
+              lines: [text],
+              lineNumbers: [record.lineNumber],
+            });
+          }
+        } else if (block.type === "thinking") {
+          flushMontage();
+          const thinking = (block as any).thinking || "";
+          if (thinking.trim()) {
+            panels.push({
+              type: "claude-think",
+              lines: [truncate(thinking, 300)],
+              lineNumbers: [record.lineNumber],
+            });
+          }
+        } else if (block.type === "tool_use") {
+          const toolName = (block as any).name || "unknown_tool";
+          pendingTools.push({ name: toolName, lineNumber: record.lineNumber });
+        }
+      }
+      continue;
+    }
+
+    if (record.type === "system") {
+      if (isInterestingSystem(record)) {
+        flushMontage();
+        const content = String(record.raw.content || "");
+        const subtype = record.raw.subtype as string | undefined;
+        const prefix = subtype === "api_error" ? "⚠️ API Error" : "";
+        panels.push({
+          type: "narrator",
+          lines: [prefix, truncate(content, 200)].filter(Boolean),
+          lineNumbers: [record.lineNumber],
+        });
+      }
+      continue;
+    }
+  }
+
+  flushMontage(); // flush any trailing tool uses
+
+  return panels;
+}

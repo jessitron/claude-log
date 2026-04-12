@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "parse": "tsc && node dist/main.js",
-    "preview": "tsc && node dist/preview.js"
+    "preview": "tsc && node dist/preview.js",
+    "comic": "tsc && node dist/comic.js"
   },
   "keywords": [],
   "author": "",
