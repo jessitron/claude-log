@@ -42,7 +42,12 @@ function renderPanel(panel: Panel): string {
       const details = panel.toolDetails || [];
       const detailItems = details
         .filter((d) => d.summary)
-        .map((d) => `<li><strong>${escapeHtml(d.name)}</strong> ${escapeHtml(d.summary)}</li>`)
+        .map((d) => {
+          const lines = d.summary.split("\n");
+          const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}`;
+          const rest = lines.slice(1).map((l) => `<span class="tool-command">${escapeHtml(l)}</span>`);
+          return `<li>${[first, ...rest].join("\n              ")}</li>`;
+        })
         .join("\n            ");
       const summary = panel.lines.map((l) => escapeHtml(l)).join("  ");
       return `

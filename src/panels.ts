@@ -94,10 +94,11 @@ function summarizeTool(name: string, input: Record<string, unknown>): string {
       return shortenPath(String(input.file_path || ""));
     case "Edit":
       return shortenPath(String(input.file_path || ""));
-    case "Bash":
-      // Prefer description if present, otherwise show the command
-      if (input.description) return String(input.description);
-      return truncate(String(input.command || ""), 100);
+    case "Bash": {
+      const cmd = truncate(String(input.command || ""), 100);
+      if (input.description) return `${input.description}\n$ ${cmd}`;
+      return `$ ${cmd}`;
+    }
     case "Grep":
       return `/${input.pattern || ""}/${input.glob ? " in " + input.glob : ""}`;
     case "Glob":
