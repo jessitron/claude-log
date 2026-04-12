@@ -1,6 +1,6 @@
 // Generate an HTML webtoon page from comic panels.
 
-import type { Panel } from "./panels.js";
+import type { Panel, ToolDetail } from "./panels.js";
 
 function escapeHtml(text: string): string {
   return text
@@ -39,12 +39,20 @@ function renderPanel(panel: Panel): string {
     </div>`;
 
     case "action-montage": {
-      const tools = panel.lines.map((l) => `<span class="tool-badge">${escapeHtml(l)}</span>`);
+      const details = panel.toolDetails || [];
+      const detailItems = details
+        .filter((d) => d.summary)
+        .map((d) => `<li><strong>${escapeHtml(d.name)}</strong> ${escapeHtml(d.summary)}</li>`)
+        .join("\n            ");
+      const summary = panel.lines.map((l) => escapeHtml(l)).join("  ");
       return `
     <div class="panel action-montage">
-      <div class="montage-burst">
-        ${tools.join("\n        ")}
-      </div>
+      <details class="montage-burst">
+        <summary class="montage-summary">${summary}</summary>
+        <ul class="montage-details">
+            ${detailItems}
+        </ul>
+      </details>
     </div>`;
     }
 

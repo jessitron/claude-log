@@ -16,10 +16,16 @@ export type PanelType =
   | "action-montage"
   | "narrator";
 
+export interface ToolDetail {
+  name: string;
+  summary: string; // short description of what the tool did
+}
+
 export interface Panel {
   type: PanelType;
   lines: string[];       // the text content to display
   toolNames?: string[];  // for action-montage: which tools were used
+  toolDetails?: ToolDetail[]; // per-tool detail for expandable view
   lineNumbers: number[]; // source line numbers for traceability
 }
 
@@ -74,6 +80,39 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen - 1) + "…";
 }
 
+function shortenPath(filePath: string): string {
+  const parts = filePath.split("/");
+  // Show last 2-3 segments
+  if (parts.length <= 3) return filePath;
+  return "…/" + parts.slice(-3).join("/");
+}
+
+function summarizeTool(name: string, input: Record<string, unknown>): string {
+  switch (name) {
+    case "Read":
+    case "Write":
+      return shortenPath(String(input.file_path || ""));
+    case "Edit":
+      return shortenPath(String(input.file_path || ""));
+    case "Bash":
+      // Prefer description if present, otherwise show the command
+      if (input.description) return String(input.description);
+      return truncate(String(input.command || ""), 100);
+    case "Grep":
+      return `/${input.pattern || ""}/${input.glob ? " in " + input.glob : ""}`;
+    case "Glob":
+      return String(input.pattern || "");
+    case "Agent":
+      return String(input.description || input.prompt || "").slice(0, 100);
+    default:
+      // For MCP tools or unknowns, show the first string-valued input
+      for (const v of Object.values(input)) {
+        if (typeof v === "string" && v.length > 0) return truncate(v, 100);
+      }
+      return "";
+  }
+}
+
 // What type of content does this assistant record's single block carry?
 function assistantBlockType(record: ConversationRecord): string | null {
   const blocks = extractAssistantBlocks(record);
@@ -89,7 +128,7 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
 
   // We accumulate tool_use blocks into an action montage.
   // When we hit something that isn't a tool_use, we flush the montage.
-  let pendingTools: { name: string; lineNumber: number }[] = [];
+  let pendingTools: { name: string; summary: string; lineNumber: number }[] = [];
 
   function flushMontage() {
     if (pendingTools.length === 0) return;
@@ -102,10 +141,15 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
     const lines = Array.from(counts.entries()).map(([name, count]) =>
       count > 1 ? `${name} ×${count}` : name
     );
+    const toolDetails = pendingTools.map((t) => ({
+      name: t.name,
+      summary: t.summary,
+    }));
     panels.push({
       type: "action-montage",
       lines,
       toolNames: Array.from(counts.keys()),
+      toolDetails,
       lineNumbers: pendingTools.map((t) => t.lineNumber),
     });
     pendingTools = [];
@@ -189,7 +233,9 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
         }
       } else if (block.type === "tool_use") {
         const toolName = (block as any).name || "unknown_tool";
-        pendingTools.push({ name: toolName, lineNumber: record.lineNumber });
+        const input = (block as any).input || {};
+        const summary = summarizeTool(toolName, input);
+        pendingTools.push({ name: toolName, summary, lineNumber: record.lineNumber });
       }
       continue;
     }
