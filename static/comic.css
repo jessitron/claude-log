@@ -227,25 +227,32 @@ body {
 
 .tool-output-toggle {
   cursor: pointer;
-  color: #534b8a;
-  font-size: 0.75rem;
-  font-style: italic;
+  color: #7ec8e3;
+  font-size: 0.85rem;
+  font-weight: bold;
+  padding: 2px 8px;
+  border: 1px solid #3282b8;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 4px;
 }
 
 .tool-output-toggle:hover {
-  color: #a89fd4;
+  background: #0f3460;
+  color: #b8e0f0;
 }
 
 .tool-output {
   background: #0d0d1a;
-  border: 1px solid #2a2a4a;
+  border: 1px solid #3282b8;
   border-radius: 4px;
-  padding: 8px;
-  margin-top: 4px;
-  font-size: 0.75rem;
-  color: #8a8aaa;
+  padding: 12px;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #c8c8e0;
   overflow-x: auto;
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
