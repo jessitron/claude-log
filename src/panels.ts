@@ -239,12 +239,24 @@ export function groupIntoPanels(
     if (record.type === "queue-operation") {
       const content = record.raw.content;
       if (typeof content === "string" && content.trim()) {
-        // Don't flush montage — this happened *during* the action!
-        panels.push({
-          type: "human-speech",
-          lines: [content],
-          lineNumbers: [record.lineNumber],
-        });
+        // Task notifications arriving via queue
+        if (content.includes("<task-notification>")) {
+          const summaryMatch = content.match(/<summary>(.*?)<\/summary>/s);
+          if (summaryMatch) {
+            panels.push({
+              type: "notification",
+              lines: [summaryMatch[1].trim()],
+              lineNumbers: [record.lineNumber],
+            });
+          }
+        } else {
+          // Don't flush montage — this happened *during* the action!
+          panels.push({
+            type: "human-speech",
+            lines: [content],
+            lineNumbers: [record.lineNumber],
+          });
+        }
       }
       continue;
     }
