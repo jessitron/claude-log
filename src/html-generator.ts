@@ -47,15 +47,33 @@ function renderPanel(panel: Panel): string {
           const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}`;
           const rest = lines.slice(1).map((l) => `<span class="tool-command">${escapeHtml(l)}</span>`);
           const mainContent = [first, ...rest].join("\n              ");
+
+          let extras = "";
+
+          // Subagent comic
+          if (d.subpanels && d.subpanels.length > 0) {
+            const subHtml = d.subpanels.map(renderPanel).join("\n");
+            const label = d.agentType || "Agent";
+            extras += `
+              <details class="subagent-details">
+                <summary class="subagent-toggle">${escapeHtml(label)} subcomic (${d.subpanels.length} panels)</summary>
+                <div class="subagent-comic">
+                  ${subHtml}
+                </div>
+              </details>`;
+          }
+
+          // Tool output
           if (d.output) {
             const truncatedOutput = d.output.length > 2000 ? d.output.slice(0, 2000) + "\n…" : d.output;
-            return `<li>${mainContent}
+            extras += `
               <details class="tool-output-details">
                 <summary class="tool-output-toggle">output</summary>
                 <pre class="tool-output">${escapeHtml(truncatedOutput)}</pre>
-              </details></li>`;
+              </details>`;
           }
-          return `<li>${mainContent}</li>`;
+
+          return `<li>${mainContent}${extras}</li>`;
         })
         .join("\n            ");
       const summary = panel.lines.map((l) => escapeHtml(l)).join("  ");

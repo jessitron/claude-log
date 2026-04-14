@@ -26,12 +26,46 @@ function printPanelStats(panels: Panel[]) {
   }
 }
 
+async function discoverSubagents(jsonlPath: string): Promise<Map<string, Panel[]>> {
+  const subagentPanels = new Map<string, Panel[]>();
+
+  // Look for a sibling directory with the same base name containing subagent files
+  const baseName = path.basename(jsonlPath, ".jsonl");
+  const siblingDir = path.join(path.dirname(jsonlPath), baseName);
+  const subagentsDir = path.join(siblingDir, "subagents");
+
+  if (!fs.existsSync(subagentsDir)) return subagentPanels;
+
+  const files = fs.readdirSync(subagentsDir).filter((f) => f.endsWith(".jsonl"));
+  for (const file of files) {
+    // Extract agentId from filename: agent-{agentId}.jsonl
+    const match = file.match(/^agent-(.+)\.jsonl$/);
+    if (!match) continue;
+    const agentId = match[1];
+
+    const filePath = path.join(subagentsDir, file);
+    console.log(`  Subagent ${agentId}: ${file}`);
+    const result = await parseConversationLog(filePath);
+    // Recurse: subagents could have their own subagents (not yet, but future-proof)
+    const panels = groupIntoPanels(result.records);
+    subagentPanels.set(agentId, panels);
+    console.log(`    ${panels.length} panels`);
+  }
+
+  return subagentPanels;
+}
+
 async function jsonlToPanels(jsonlPath: string, outputDir: string): Promise<string> {
   console.log(`Parsing: ${jsonlPath}`);
   const result = await parseConversationLog(jsonlPath);
   console.log(`  ${result.records.length} records (${result.stats.totalLines} lines)`);
 
-  const panels = groupIntoPanels(result.records);
+  const subagentPanels = await discoverSubagents(jsonlPath);
+  if (subagentPanels.size > 0) {
+    console.log(`  Found ${subagentPanels.size} subagent(s)`);
+  }
+
+  const panels = groupIntoPanels(result.records, subagentPanels);
   printPanelStats(panels);
 
   const baseName = path.basename(jsonlPath, ".jsonl");

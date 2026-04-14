@@ -20,6 +20,8 @@ export interface ToolDetail {
   name: string;
   summary: string; // short description of what the tool did
   output?: string; // tool result output, if available
+  subpanels?: Panel[]; // for Agent tools: the subagent's conversation as panels
+  agentType?: string;  // e.g. "Explore"
 }
 
 export interface Panel {
@@ -150,16 +152,56 @@ function buildToolResultIndex(records: ConversationRecord[]): Map<string, string
   return index;
 }
 
-export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
+// Build a map from tool_use id → agentId, so we can link Agent calls to subagent files.
+export interface AgentInfo {
+  agentId: string;
+  agentType: string;
+}
+
+function buildAgentIndex(records: ConversationRecord[]): Map<string, AgentInfo> {
+  const index = new Map<string, AgentInfo>();
+  for (const record of records) {
+    if (record.type !== "user" || !record.raw.toolUseResult) continue;
+    const result = record.raw.toolUseResult as Record<string, unknown>;
+    if (!result.agentId) continue;
+    // Find the matching tool_use_id from the message content
+    const msg = record.raw.message as { content?: unknown };
+    if (Array.isArray(msg?.content)) {
+      for (const block of msg.content) {
+        if ((block as any).type === "tool_result" && (block as any).tool_use_id) {
+          index.set((block as any).tool_use_id, {
+            agentId: String(result.agentId),
+            agentType: String(result.agentType || "Agent"),
+          });
+        }
+      }
+    }
+  }
+  return index;
+}
+
+// subagentPanels: map from agentId → Panel[] (pre-parsed subagent conversations)
+export function groupIntoPanels(
+  records: ConversationRecord[],
+  subagentPanels?: Map<string, Panel[]>
+): Panel[] {
   const panels: Panel[] = [];
   const toolResults = buildToolResultIndex(records);
+  const agentIndex = buildAgentIndex(records);
 
   // Filter to just the records we care about, so index-based look-ahead is clean.
   const visible = records.filter((r) => !isSkippable(r));
 
   // We accumulate tool_use blocks into an action montage.
   // When we hit something that isn't a tool_use, we flush the montage.
-  let pendingTools: { name: string; summary: string; output?: string; lineNumber: number }[] = [];
+  let pendingTools: {
+    name: string;
+    summary: string;
+    output?: string;
+    subpanels?: Panel[];
+    agentType?: string;
+    lineNumber: number;
+  }[] = [];
 
   function flushMontage() {
     if (pendingTools.length === 0) return;
@@ -176,6 +218,8 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
       name: t.name,
       summary: t.summary,
       output: t.output,
+      subpanels: t.subpanels,
+      agentType: t.agentType,
     }));
     panels.push({
       type: "action-montage",
@@ -269,7 +313,26 @@ export function groupIntoPanels(records: ConversationRecord[]): Panel[] {
         const summary = summarizeTool(toolName, input);
         const toolId = (block as any).id as string | undefined;
         const output = toolId ? toolResults.get(toolId) : undefined;
-        pendingTools.push({ name: toolName, summary, output, lineNumber: record.lineNumber });
+
+        // For Agent calls, look up subagent panels
+        let agentSubpanels: Panel[] | undefined;
+        let agentType: string | undefined;
+        if (toolName === "Agent" && toolId) {
+          const agentInfo = agentIndex.get(toolId);
+          if (agentInfo && subagentPanels) {
+            agentSubpanels = subagentPanels.get(agentInfo.agentId);
+            agentType = agentInfo.agentType;
+          }
+        }
+
+        pendingTools.push({
+          name: toolName,
+          summary,
+          output,
+          subpanels: agentSubpanels,
+          agentType,
+          lineNumber: record.lineNumber,
+        });
       }
       continue;
     }

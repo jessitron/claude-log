@@ -245,6 +245,51 @@ body {
   padding-left: 8px;
 }
 
+/* === Subagent nested comic === */
+.subagent-details {
+  margin-top: 6px;
+}
+
+.subagent-toggle {
+  cursor: pointer;
+  color: #e9a045;
+  font-size: 0.85rem;
+  font-weight: bold;
+  padding: 2px 8px;
+  border: 1px solid #c47f2a;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.subagent-toggle:hover {
+  background: #3a2510;
+  color: #f0c070;
+}
+
+.subagent-comic {
+  margin-top: 8px;
+  padding: 10px;
+  border-left: 3px solid #c47f2a;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0 8px 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subagent-comic .panel {
+  font-size: 0.9em;
+}
+
+.subagent-comic .montage-burst {
+  border-width: 2px;
+}
+
+.subagent-comic .montage-burst::before {
+  font-size: 0.6rem;
+  padding: 1px 8px;
+}
+
 .tool-output-details {
   margin-top: 4px;
 }
