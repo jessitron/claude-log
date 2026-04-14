@@ -14,7 +14,8 @@ export type PanelType =
   | "claude-speech"
   | "claude-think"
   | "action-montage"
-  | "narrator";
+  | "narrator"
+  | "notification";
 
 export interface ToolDetail {
   name: string;
@@ -249,8 +250,23 @@ export function groupIntoPanels(
     }
 
     if (record.type === "user") {
-      flushMontage();
       const text = extractUserText(record);
+
+      // Task notifications: background tasks reporting back
+      if (text.includes("<task-notification>")) {
+        const summaryMatch = text.match(/<summary>(.*?)<\/summary>/s);
+        if (summaryMatch) {
+          // Don't flush montage — this arrived during ongoing work
+          panels.push({
+            type: "notification",
+            lines: [summaryMatch[1].trim()],
+            lineNumbers: [record.lineNumber],
+          });
+        }
+        continue;
+      }
+
+      flushMontage();
       if (text.trim()) {
         // Strip XML-looking command wrappers from slash commands
         const cleaned = text.replace(/<\/?command-[^>]*>/g, "").trim();

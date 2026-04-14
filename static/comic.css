@@ -327,6 +327,35 @@ body {
   word-wrap: break-word;
 }
 
+/* === Notification (background task reporting in) === */
+.notification {
+  align-self: flex-end;
+  max-width: 75%;
+}
+
+.notification-box {
+  background: #1a2e1a;
+  border: 1px solid #4a8a4a;
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: #8ac88a;
+  font-size: 0.8rem;
+  font-family: 'Courier New', monospace;
+  position: relative;
+}
+
+.notification-box::before {
+  content: '📬';
+  position: absolute;
+  top: -12px;
+  right: 12px;
+  font-size: 1rem;
+}
+
+.notification-box p {
+  margin: 0;
+}
+
 /* === Narrator === */
 .narrator {
   align-self: center;

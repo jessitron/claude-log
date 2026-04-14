@@ -88,6 +88,14 @@ function renderPanel(panel: Panel): string {
     </div>`;
     }
 
+    case "notification":
+      return `
+    <div class="panel notification">
+      <div class="notification-box">
+        ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
+      </div>
+    </div>`;
+
     case "narrator":
       return `
     <div class="panel narrator">
