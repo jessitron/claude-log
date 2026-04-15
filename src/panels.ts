@@ -204,8 +204,18 @@ export function groupIntoPanels(
     lineNumber: number;
   }[] = [];
 
+  // Notifications that arrive mid-montage get deferred until after the montage flushes
+  let deferredNotifications: Panel[] = [];
+
   function flushMontage() {
-    if (pendingTools.length === 0) return;
+    if (pendingTools.length === 0) {
+      // No montage to flush, but emit any deferred notifications anyway
+      if (deferredNotifications.length > 0) {
+        panels.push(...deferredNotifications);
+        deferredNotifications = [];
+      }
+      return;
+    }
     const toolNames = pendingTools.map((t) => t.name);
     // Deduplicate and count for display
     const counts = new Map<string, number>();
@@ -230,7 +240,18 @@ export function groupIntoPanels(
       lineNumbers: pendingTools.map((t) => t.lineNumber),
     });
     pendingTools = [];
+
+    // Emit notifications that arrived during this montage
+    if (deferredNotifications.length > 0) {
+      panels.push(...deferredNotifications);
+      deferredNotifications = [];
+    }
   }
+
+  // Track enqueued message content so we can deduplicate when the same text
+  // appears again as a regular "user" record (enqueue = typed while Claude works,
+  // user = the same message processed as a turn).
+  const enqueuedContent = new Set<string>();
 
   for (let i = 0; i < visible.length; i++) {
     const record = visible[i];
@@ -243,11 +264,16 @@ export function groupIntoPanels(
         if (content.includes("<task-notification>")) {
           const summaryMatch = content.match(/<summary>(.*?)<\/summary>/s);
           if (summaryMatch) {
-            panels.push({
+            const notif: Panel = {
               type: "notification",
               lines: [summaryMatch[1].trim()],
               lineNumbers: [record.lineNumber],
-            });
+            };
+            if (pendingTools.length > 0) {
+              deferredNotifications.push(notif);
+            } else {
+              panels.push(notif);
+            }
           }
         } else {
           // Don't flush montage — this happened *during* the action!
@@ -256,6 +282,7 @@ export function groupIntoPanels(
             lines: [content],
             lineNumbers: [record.lineNumber],
           });
+          enqueuedContent.add(content);
         }
       }
       continue;
@@ -268,13 +295,24 @@ export function groupIntoPanels(
       if (text.includes("<task-notification>")) {
         const summaryMatch = text.match(/<summary>(.*?)<\/summary>/s);
         if (summaryMatch) {
-          // Don't flush montage — this arrived during ongoing work
-          panels.push({
+          const notif: Panel = {
             type: "notification",
             lines: [summaryMatch[1].trim()],
             lineNumbers: [record.lineNumber],
-          });
+          };
+          // Defer until after montage flushes — notification arrived during work
+          if (pendingTools.length > 0) {
+            deferredNotifications.push(notif);
+          } else {
+            panels.push(notif);
+          }
         }
+        continue;
+      }
+
+      // Skip if this was already rendered from a queue-operation enqueue
+      if (enqueuedContent.has(text)) {
+        enqueuedContent.delete(text);
         continue;
       }
 
