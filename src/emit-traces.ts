@@ -153,27 +153,20 @@ function buildTurnSpans(
   turnAttrs.push(intAttr("tool_call.count", toolCalls.length));
   turnAttrs.push(intAttr("agent.count", agents.length));
 
-  // Human message as an event on the turn
-  const turnEvents: OtlpEvent[] = [];
-  if (turn.humanMessage.text) {
-    turnEvents.push({
-      name: "human_message",
-      timeUnixNano: startNano,
-      attributes: [strAttr("message.text", truncate(turn.humanMessage.text, 1000))],
-    });
+  // Errors as attributes on the turn span
+  if (resp.errors.length > 0) {
+    turnAttrs.push(intAttr("error.count", resp.errors.length));
+    const errorMessages = resp.errors.map((e) => e.message).filter((m) => m && m !== "{}");
+    if (errorMessages.length > 0) {
+      turnAttrs.push(strAttr("error.messages", truncate(errorMessages.join("; "), 500)));
+    }
+    const retryCount = resp.errors.filter((e) => e.isRetry).length;
+    if (retryCount > 0) {
+      turnAttrs.push(intAttr("error.retry_count", retryCount));
+    }
   }
 
-  // Errors as events
-  for (const err of resp.errors) {
-    turnEvents.push({
-      name: "error",
-      timeUnixNano: startNano, // we don't have per-error timestamps
-      attributes: [
-        strAttr("error.message", truncate(err.message, 500)),
-        strAttr("error.is_retry", String(err.isRetry)),
-      ],
-    });
-  }
+  const turnEvents: OtlpEvent[] = [];
 
   spans.push({
     traceId,
@@ -188,47 +181,74 @@ function buildTurnSpans(
     status: { code: resp.errors.length > 0 ? 2 : 1 },
   });
 
-  // Child spans for steps. We need to distribute time across steps.
-  // Since we don't have per-step timestamps, we'll distribute evenly within the turn.
+  // Child spans: human message, then chat, then tool calls/agents.
+  // We distribute time across all child spans within the turn.
   const stepsWithSpans = resp.steps.filter(
     (s) => s.kind === "tool_call" || s.kind === "agent"
   );
 
-  if (stepsWithSpans.length > 0) {
-    const turnStartMs = new Date(turn.startTime).getTime();
-    const turnEndMs = new Date(turn.endTime || turn.startTime).getTime();
-    const turnDuration = Math.max(turnEndMs - turnStartMs, stepsWithSpans.length); // at least 1ms per step
-    const stepDuration = turnDuration / (stepsWithSpans.length + 1); // +1 for thinking/text time
+  const turnStartMs = new Date(turn.startTime).getTime();
+  const turnEndMs = new Date(turn.endTime || turn.startTime).getTime();
+  // Slots: human message + chat + tool/agent steps
+  const totalSlots = 2 + stepsWithSpans.length; // human + chat + tools
+  const turnDuration = Math.max(turnEndMs - turnStartMs, totalSlots);
+  const slotDuration = turnDuration / totalSlots;
 
-    for (let i = 0; i < stepsWithSpans.length; i++) {
-      const step = stepsWithSpans[i];
-      const stepStartMs = turnStartMs + stepDuration * (i + 1); // offset by 1 for initial thinking
-      const stepEndMs = stepStartMs + stepDuration * 0.8; // leave gaps between steps
+  // Slot 0: human message span
+  buildHumanMessageSpan(
+    traceId,
+    turnSpanId,
+    turn,
+    turnStartMs,
+    turnStartMs + slotDuration * 0.8,
+    spans
+  );
 
-      if (step.kind === "tool_call") {
-        buildToolCallSpan(traceId, turnSpanId, step, stepStartMs, stepEndMs, meta, spans);
-      } else if (step.kind === "agent") {
-        buildAgentSpan(traceId, turnSpanId, step, stepStartMs, stepEndMs, meta, spans);
-      }
+  // Slot 1: chat span (LLM inference)
+  const chatStartMs = turnStartMs + slotDuration;
+  const chatEndMs = chatStartMs + slotDuration * 0.8;
+  buildChatSpan(traceId, turnSpanId, turn, chatStartMs, chatEndMs, textSteps, meta, spans);
+
+  // Remaining slots: tool calls and agent steps
+  for (let i = 0; i < stepsWithSpans.length; i++) {
+    const step = stepsWithSpans[i];
+    const stepStartMs = turnStartMs + slotDuration * (i + 2); // offset by 2 for human + chat
+    const stepEndMs = stepStartMs + slotDuration * 0.8;
+
+    if (step.kind === "tool_call") {
+      buildToolCallSpan(traceId, turnSpanId, step, stepStartMs, stepEndMs, meta, spans);
+    } else if (step.kind === "agent") {
+      buildAgentSpan(traceId, turnSpanId, step, stepStartMs, stepEndMs, meta, spans);
     }
-
-    // Add a chat span for the LLM inference portion
-    // Place it at the start of the turn (the thinking/reasoning phase)
-    const chatEndMs = turnStartMs + stepDuration;
-    buildChatSpan(traceId, turnSpanId, turn, turnStartMs, chatEndMs, textSteps, meta, spans);
-  } else {
-    // No tool calls — the whole turn is just chat
-    buildChatSpan(
-      traceId,
-      turnSpanId,
-      turn,
-      new Date(turn.startTime).getTime(),
-      new Date(turn.endTime || turn.startTime).getTime(),
-      textSteps,
-      meta,
-      spans
-    );
   }
+}
+
+function buildHumanMessageSpan(
+  traceId: string,
+  parentSpanId: string,
+  turn: Turn,
+  startMs: number,
+  endMs: number,
+  spans: OtlpSpan[]
+): void {
+  const spanId = genSpanId();
+  const text = turn.humanMessage.text;
+
+  spans.push({
+    traceId,
+    spanId,
+    parentSpanId,
+    name: `human message`,
+    kind: 1, // INTERNAL
+    startTimeUnixNano: msToNano(startMs),
+    endTimeUnixNano: msToNano(endMs),
+    attributes: [
+      strAttr("message.text", truncate(text, 1000)),
+      intAttr("message.length", text.length),
+    ],
+    events: [],
+    status: { code: 0 }, // UNSET
+  });
 }
 
 function buildChatSpan(
