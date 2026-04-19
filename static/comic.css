@@ -14,9 +14,9 @@ body {
 }
 
 .comic-strip {
-  max-width: 700px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 20px 10px;
+  padding: 20px 40px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -73,7 +73,7 @@ body {
 /* === Human speech === */
 .human-speech {
   align-self: flex-start;
-  max-width: 85%;
+  max-width: 50%;
 }
 
 .character-label {
@@ -111,7 +111,8 @@ body {
 /* === Claude speech === */
 .claude-speech {
   align-self: flex-end;
-  max-width: 85%;
+  max-width: 50%;
+  margin-right: 30%;
 }
 
 .claude-bubble {
@@ -142,7 +143,10 @@ body {
 /* === Thinking === */
 .claude-think {
   align-self: flex-end;
-  max-width: 75%;
+  max-width: 50%;
+  margin-right: 30%;
+  z-index: 2;
+  position: relative;
 }
 
 .thought-bubble {
@@ -175,15 +179,24 @@ body {
 
 /* === Action Montage === */
 .action-montage {
-  align-self: center;
-  width: 90%;
+  align-self: flex-end;
+  width: 55%;
+  z-index: 0;
+  position: relative;
+}
+
+/* When a think bubble is immediately followed by an action montage,
+   pull the montage up behind the thought — action happening in the background */
+.claude-think + .action-montage {
+  margin-top: -30px;
+  z-index: 0;
 }
 
 .montage-burst {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   border: 3px solid #e94560;
   border-radius: 8px;
-  padding: 12px 16px;
+  padding: 20px 16px 12px 16px;
   position: relative;
 }
 
@@ -330,7 +343,8 @@ body {
 /* === Notification (background task reporting in) === */
 .notification {
   align-self: flex-end;
-  max-width: 75%;
+  max-width: 50%;
+  margin-right: 30%;
 }
 
 .notification-box {
