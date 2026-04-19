@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Generate comic HTML for every example/*.jsonl, then print file:// links.
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+OUTPUT_DIR="output"
+
+echo "Building..."
+npx tsc
+
+shopt -s nullglob
+jsonls=(example/*.jsonl)
+if [ ${#jsonls[@]} -eq 0 ]; then
+  echo "No .jsonl files found in example/"
+  exit 1
+fi
+
+for jsonl in "${jsonls[@]}"; do
+  echo
+  echo "=== $jsonl ==="
+  node dist/comic.js "$jsonl" "$OUTPUT_DIR"
+done
+
+echo
+echo "=== Comics ==="
+abs_output="$(cd "$OUTPUT_DIR" && pwd)"
+for jsonl in "${jsonls[@]}"; do
+  base="$(basename "$jsonl" .jsonl)"
+  html="$abs_output/$base.html"
+  if [ -f "$html" ]; then
+    echo "  file://$html"
+  else
+    echo "  MISSING: $html"
+  fi
+done

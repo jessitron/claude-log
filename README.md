@@ -190,4 +190,30 @@ Visual representation with panels showing each conversation turn, perfect for un
 
 ## Getting Started
 
-(To be added as we build the parser)
+### Generate all example comics
+
+```
+./run
+```
+
+Builds the TypeScript sources, generates a comic HTML for every `example/*.jsonl`, writes outputs to `output/`, and prints a `file://` link to each comic.
+
+### Generate one comic
+
+```
+npm run comic -- <path-to-jsonl> [output-dir]
+```
+
+The pipeline has two steps you can also invoke separately:
+
+```
+npm run comic -- panels <path-to-jsonl>       # step 1: JSONL → editable panels JSON
+npm run comic -- html <path-to-panels.json>   # step 2: panels JSON → HTML
+```
+
+If a sibling directory `<basename>/subagents/agent-*.jsonl` exists next to the input file, subagent logs are discovered and embedded automatically.
+
+### Other scripts
+
+- `npm run parse -- <path-to-jsonl>` — parse and print stats (see `src/main.ts`)
+- `npm run preview -- <path-to-jsonl>` — preview output (see `src/preview.ts`)
