@@ -12,12 +12,45 @@ const root = path.resolve(__dirname, "..");
 const staticDir = path.join(root, "static");
 const outputDir = path.join(root, "output");
 
-const htmls = fs.existsSync(outputDir)
-  ? fs.readdirSync(outputDir).filter((f) => f.endsWith(".html"))
-  : [];
-if (htmls.length === 0) {
+function listComics() {
+  if (!fs.existsSync(outputDir)) return [];
+  return fs
+    .readdirSync(outputDir)
+    .filter((f) => f.endsWith(".html"))
+    .sort();
+}
+
+if (listComics().length === 0) {
   console.error("No HTML in output/. Run ./run first to generate the example comics.");
   process.exit(1);
+}
+
+function indexHtml() {
+  const items = listComics()
+    .map((f) => `    <li><a href="/${f}">${f.replace(/\.html$/, "")}</a></li>`)
+    .join("\n");
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Comics</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 2rem; }
+    h1 { color: #e94560; }
+    ul { list-style: none; padding: 0; }
+    li { margin: 0.5rem 0; }
+    a { color: #7ec8e3; font-size: 1.1rem; text-decoration: none; }
+    a:hover { color: #b8e0f0; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Comics</h1>
+  <ul>
+${items}
+  </ul>
+</body>
+</html>
+`;
 }
 
 const port = Number(process.env.PORT || 3000);
@@ -27,7 +60,17 @@ browserSync.init({
     // First match wins — static/ shadows output/, so edits to static/comic.css
     // are served live without re-running ./run.
     baseDir: [staticDir, outputDir],
-    directory: true,
+    middleware: [
+      (req, res, next) => {
+        const url = req.url.split("?")[0];
+        if (url === "/" || url === "/index.html") {
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          res.end(indexHtml());
+          return;
+        }
+        next();
+      },
+    ],
   },
   files: [
     path.join(staticDir, "comic.css"),
