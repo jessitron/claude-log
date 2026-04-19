@@ -351,6 +351,7 @@ export function groupIntoPanels(
             type: "notification",
             lines: [summaryMatch[1].trim()],
             lineNumbers: [record.lineNumber],
+            queued: true,
           };
           // Defer until after montage flushes — notification arrived during work
           if (pendingTools.length > 0) {
@@ -359,12 +360,6 @@ export function groupIntoPanels(
             panels.push(notif);
           }
         }
-        continue;
-      }
-
-      // Skip if this was already rendered from a queue-operation enqueue
-      if (enqueuedContent.has(text)) {
-        enqueuedContent.delete(text);
         continue;
       }
 

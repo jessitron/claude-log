@@ -36,13 +36,18 @@ function panelAttrs(panel: Panel, index: number): string {
   return `data-panel="${index}" data-source-lines="${panel.lineNumbers.join(",")}"${file}`;
 }
 
+function qCls(panel: Panel): string {
+  return panel.queued ? " queued" : "";
+}
+
 function renderPanel(panel: Panel, index: number): string {
   const attrs = panelAttrs(panel, index);
   const tag = sourceTag(panel);
+  const q = qCls(panel);
   switch (panel.type) {
     case "human-speech":
       return `
-    <div class="panel human-speech" ${attrs}>
+    <div class="panel human-speech${q}" ${attrs}>
       ${tag}
       <div class="character-label">Human</div>
       <div class="speech-bubble human-bubble">
@@ -125,7 +130,7 @@ function renderPanel(panel: Panel, index: number): string {
 
     case "notification":
       return `
-    <div class="panel notification" ${attrs}>
+    <div class="panel notification${q}" ${attrs}>
       ${tag}
       <div class="notification-box">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
@@ -163,6 +168,7 @@ export function generateHtml(panels: Panel[], title: string): string {
         <button id="toggle-outputs" class="toggle-btn">Show all outputs</button>
         <button id="toggle-refs" class="toggle-btn" title="Hotkey: r">Show refs <kbd>r</kbd></button>
         <button id="toggle-tokens" class="toggle-btn" title="Hotkey: t">Show tokens <kbd>t</kbd></button>
+        <button id="toggle-queued" class="toggle-btn" title="Hotkey: q">Show queued <kbd>q</kbd></button>
       </div>
     </div>
 ${panelHtml}
@@ -200,6 +206,7 @@ ${panelHtml}
     }
     hotkeyToggle('toggle-refs', 'show-refs', 'r', 'Show refs', 'Hide refs');
     hotkeyToggle('toggle-tokens', 'show-tokens', 't', 'Show tokens', 'Hide tokens');
+    hotkeyToggle('toggle-queued', 'show-queued', 'q', 'Show queued', 'Hide queued');
 
     document.addEventListener('click', function(e) {
       const tag = e.target.closest('.source-tag');

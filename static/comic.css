@@ -472,3 +472,21 @@ body.show-tokens .token-badge {
   color: #534b8a;
   font-style: italic;
 }
+
+/* Queued panels — typed while Claude was busy, or injected mid-turn
+   (task-notifications from finished background commands). Hidden by default;
+   revealed with the 'q' toggle. When revealed, the distinctive dashed border
+   marks them as "Claude wasn't looking when this arrived". */
+.panel.queued {
+  display: none;
+}
+
+body.show-queued .panel.queued {
+  display: block;
+}
+
+body.show-queued .panel.queued .speech-bubble,
+body.show-queued .panel.queued .notification-box {
+  border-style: dashed;
+  border-width: 2px;
+}

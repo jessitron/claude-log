@@ -3,7 +3,7 @@
 ## 👤 Human Speech (`human-speech`)
 **What:** Messages the user typed as prompts.
 **Visual:** Blue bubble on the left, with a left-pointing speech tail.
-**Source:** `user` records (excluding meta, tool results, and task notifications). Also `queue-operation` enqueue records that aren't notifications.
+**Source:** `user` records (excluding meta, tool results, and task notifications). Also `queue-operation` enqueue records — these render at the typed position with `queued: true` (hidden by default, see "Queued Panels" below). The matching user record at the dequeued position renders a normal (always-visible) panel.
 
 ## 🤖 Claude Speech (`claude-speech`)
 **What:** Claude's real dialogue — explanations, plans, answers.
@@ -30,12 +30,12 @@
 
 ## 📬 Notification (`notification`)
 **What:** Background tasks reporting completion — a messenger arriving from offscreen.
-**Visual:** Green monospace box on the right, with a 📬 mailbox emoji.
+**Visual:** Green monospace box on the right, with a 📬 mailbox emoji. Dashed border when revealed via `q`.
 **Source:** Emitted at the moment Claude *sees* the notification, which shows up in two forms:
 - `user` records containing `<task-notification>` XML (delivered at the next turn)
 - `attachment` records with `type=queued_command` and `commandMode=task-notification` (injected mid-turn)
 
-The earlier `queue-operation` enqueue (system queues the notification) is ignored to avoid a duplicate panel before Claude has actually received it. Extracts the `<summary>` text.
+All notifications are marked `queued: true` (hidden by default; `q` toggle reveals them). The earlier `queue-operation` enqueue (system queues the notification) is ignored to avoid a duplicate panel before Claude has actually received it. Extracts the `<summary>` text.
 
 ## 📜 Narrator (`narrator`)
 **What:** System events worth noting — API errors, etc.
@@ -47,6 +47,16 @@ The earlier `queue-operation` enqueue (system queues the notification) is ignore
 ## Toggle Buttons (top of page)
 - **Show all actions** — opens/closes every action montage
 - **Show all outputs** — opens/closes every tool output block
+- **Show refs** (`r`) — reveals source-line tags on each panel
+- **Show tokens** (`t`) — reveals per-turn token badges
+- **Show queued** (`q`) — reveals panels marked `queued: true`: typed-while-busy user messages at their *typed* position, and background-command notifications. Dashed border distinguishes them from normally-delivered dialogue.
+
+## Queued Panels (`queued: true`)
+Any content that arrived while Claude was working but wasn't part of the straightforward turn-by-turn flow gets `queued: true`. Hidden by default so the comic reads cleanly; revealed via the `q` hotkey for debugging conversation dynamics.
+
+Two sources:
+1. **Enqueued user text** — human typed while Claude was generating. Rendered at the enqueue position (queued) *and* at the dequeue position (normal), so the reader can see both "when I typed it" and "when Claude received it".
+2. **Task-notifications** — background shell commands finishing mid-turn.
 
 ## Records We Skip
 - `progress` — noisy tool progress updates (often 50%+ of all records)
