@@ -366,7 +366,6 @@ export function groupIntoPanels(
             type: "notification",
             lines: [summaryMatch[1].trim()],
             lineNumbers: [record.lineNumber],
-            queued: true,
           };
           if (pendingTools.length > 0) {
             deferredNotifications.push(notif);
@@ -389,7 +388,6 @@ export function groupIntoPanels(
             type: "notification",
             lines: [summaryMatch[1].trim()],
             lineNumbers: [record.lineNumber],
-            queued: true,
           };
           // Defer until after montage flushes — notification arrived during work
           if (pendingTools.length > 0) {

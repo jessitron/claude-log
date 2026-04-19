@@ -680,10 +680,10 @@ body.show-tokens .token-badge {
   opacity: 0.5;
 }
 
-/* Queued panels — typed while Claude was busy, or injected mid-turn
-   (task-notifications from finished background commands). Hidden by default;
-   revealed with the 'q' toggle. When revealed, the distinctive dashed border
-   marks them as "Claude wasn't looking when this arrived". */
+/* Queued panels — human typed while Claude was busy. Hidden by default
+   because the same text re-appears as a regular user record at the
+   dequeued position (where Claude actually received it). Revealed with
+   the 'q' toggle; the dashed border marks "Claude wasn't looking yet". */
 .panel.queued {
   display: none;
 }
