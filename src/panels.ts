@@ -262,21 +262,11 @@ export function groupIntoPanels(
     if (record.type === "queue-operation") {
       const content = record.raw.content;
       if (typeof content === "string" && content.trim()) {
-        // Task notifications arriving via queue
+        // Task notifications: skip here — they'll re-appear as a user record
+        // when Claude actually receives them. Emitting from the enqueue would
+        // show the notification before Claude has seen it.
         if (content.includes("<task-notification>")) {
-          const summaryMatch = content.match(/<summary>(.*?)<\/summary>/s);
-          if (summaryMatch) {
-            const notif: Panel = {
-              type: "notification",
-              lines: [summaryMatch[1].trim()],
-              lineNumbers: [record.lineNumber],
-            };
-            if (pendingTools.length > 0) {
-              deferredNotifications.push(notif);
-            } else {
-              panels.push(notif);
-            }
-          }
+          // intentionally no-op
         } else {
           // Don't flush montage — this happened *during* the action!
           panels.push({
