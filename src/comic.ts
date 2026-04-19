@@ -47,7 +47,7 @@ async function discoverSubagents(jsonlPath: string): Promise<Map<string, Panel[]
     console.log(`  Subagent ${agentId}: ${file}`);
     const result = await parseConversationLog(filePath);
     // Recurse: subagents could have their own subagents (not yet, but future-proof)
-    const panels = groupIntoPanels(result.records);
+    const panels = groupIntoPanels(result.records, undefined, path.basename(filePath, ".jsonl"));
     subagentPanels.set(agentId, panels);
     console.log(`    ${panels.length} panels`);
   }
@@ -65,10 +65,9 @@ async function jsonlToPanels(jsonlPath: string, outputDir: string): Promise<stri
     console.log(`  Found ${subagentPanels.size} subagent(s)`);
   }
 
-  const panels = groupIntoPanels(result.records, subagentPanels);
-  printPanelStats(panels);
-
   const baseName = path.basename(jsonlPath, ".jsonl");
+  const panels = groupIntoPanels(result.records, subagentPanels, baseName);
+  printPanelStats(panels);
   const title = baseName.replace(/[-_]/g, " ");
 
   const artifact = { title, panels };

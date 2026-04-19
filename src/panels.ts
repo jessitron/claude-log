@@ -31,6 +31,7 @@ export interface Panel {
   toolNames?: string[];  // for action-montage: which tools were used
   toolDetails?: ToolDetail[]; // per-tool detail for expandable view
   lineNumbers: number[]; // source line numbers for traceability
+  sourceFile?: string;   // basename of JSONL file these records came from
 }
 
 // Records we skip entirely — they're noise for a comic
@@ -184,7 +185,8 @@ function buildAgentIndex(records: ConversationRecord[]): Map<string, AgentInfo> 
 // subagentPanels: map from agentId → Panel[] (pre-parsed subagent conversations)
 export function groupIntoPanels(
   records: ConversationRecord[],
-  subagentPanels?: Map<string, Panel[]>
+  subagentPanels?: Map<string, Panel[]>,
+  sourceFile?: string
 ): Panel[] {
   const panels: Panel[] = [];
   const toolResults = buildToolResultIndex(records);
@@ -420,6 +422,10 @@ export function groupIntoPanels(
   }
 
   flushMontage(); // flush any trailing tool uses
+
+  if (sourceFile) {
+    for (const p of panels) p.sourceFile = sourceFile;
+  }
 
   return panels;
 }

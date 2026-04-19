@@ -12,11 +12,15 @@ function escapeHtml(text: string): string {
 
 function sourceTag(panel: Panel): string {
   const lines = panel.lineNumbers.join(",");
-  return `<span class="source-tag" title="JSONL line(s): ${lines}">L${lines}</span>`;
+  const file = panel.sourceFile || "";
+  const ref = file ? `${file}:L${lines}` : `L${lines}`;
+  const title = file ? `${file} line(s): ${lines}` : `JSONL line(s): ${lines}`;
+  return `<span class="source-tag" title="${escapeHtml(title)}">${escapeHtml(ref)}</span>`;
 }
 
 function panelAttrs(panel: Panel, index: number): string {
-  return `data-panel="${index}" data-source-lines="${panel.lineNumbers.join(",")}"`;
+  const file = panel.sourceFile ? ` data-source-file="${escapeHtml(panel.sourceFile)}"` : "";
+  return `data-panel="${index}" data-source-lines="${panel.lineNumbers.join(",")}"${file}`;
 }
 
 function renderPanel(panel: Panel, index: number): string {
