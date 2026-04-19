@@ -31,7 +31,11 @@
 ## 📬 Notification (`notification`)
 **What:** Background tasks reporting completion — a messenger arriving from offscreen.
 **Visual:** Green monospace box on the right, with a 📬 mailbox emoji.
-**Source:** `user` records and `queue-operation` enqueue records containing `<task-notification>` XML. Extracts the `<summary>` text.
+**Source:** Emitted at the moment Claude *sees* the notification, which shows up in two forms:
+- `user` records containing `<task-notification>` XML (delivered at the next turn)
+- `attachment` records with `type=queued_command` and `commandMode=task-notification` (injected mid-turn)
+
+The earlier `queue-operation` enqueue (system queues the notification) is ignored to avoid a duplicate panel before Claude has actually received it. Extracts the `<summary>` text.
 
 ## 📜 Narrator (`narrator`)
 **What:** System events worth noting — API errors, etc.
@@ -48,6 +52,6 @@
 - `progress` — noisy tool progress updates (often 50%+ of all records)
 - `file-history-snapshot` — internal bookkeeping
 - `queue-operation` with `operation != "enqueue"` — removal records
-- `attachment` — duplicate of queue-operation notifications
+- `attachment` — all flavors except `queued_command`/`task-notification`, which becomes a 📬 Notification panel. Skipped attachments include `hook_success` (hook stdout/stderr), `task_reminder` (system nags to Claude), `deferred_tools_delta`, `mcp_instructions_delta`, and `skill_listing` — all session plumbing, not narrative
 - `user` with `isMeta` — system reminders injected into the conversation
 - `user` with `toolUseResult` — tool results (data, not dialogue)
