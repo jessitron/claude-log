@@ -20,3 +20,6 @@ See `notes/progress.md` for session-by-session progress, design decisions, and w
 
 ## Key design principle
 **Loud defensiveness**: never silently skip schema surprises. Report unknown fields, missing expected fields, and format differences with every parse. The JSONL schema evolves across Claude Code versions — we want to see what's changing.
+
+## Shell conventions
+Don't use `git -C <path> ...` — it triggers an unnecessary permission prompt every time. Bash already runs from the project root, so plain `git add`, `git commit`, etc. are enough.
