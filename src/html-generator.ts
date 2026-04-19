@@ -10,11 +10,23 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function renderPanel(panel: Panel): string {
+function sourceTag(panel: Panel): string {
+  const lines = panel.lineNumbers.join(",");
+  return `<span class="source-tag" title="JSONL line(s): ${lines}">L${lines}</span>`;
+}
+
+function panelAttrs(panel: Panel, index: number): string {
+  return `data-panel="${index}" data-source-lines="${panel.lineNumbers.join(",")}"`;
+}
+
+function renderPanel(panel: Panel, index: number): string {
+  const attrs = panelAttrs(panel, index);
+  const tag = sourceTag(panel);
   switch (panel.type) {
     case "human-speech":
       return `
-    <div class="panel human-speech">
+    <div class="panel human-speech" ${attrs}>
+      ${tag}
       <div class="character-label">Human</div>
       <div class="speech-bubble human-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
@@ -23,7 +35,8 @@ function renderPanel(panel: Panel): string {
 
     case "claude-speech":
       return `
-    <div class="panel claude-speech">
+    <div class="panel claude-speech" ${attrs}>
+      ${tag}
       <div class="character-label">Claude</div>
       <div class="speech-bubble claude-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
@@ -32,7 +45,8 @@ function renderPanel(panel: Panel): string {
 
     case "claude-think":
       return `
-    <div class="panel claude-think">
+    <div class="panel claude-think" ${attrs}>
+      ${tag}
       <div class="thought-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
       </div>
@@ -52,7 +66,7 @@ function renderPanel(panel: Panel): string {
 
           // Subagent comic
           if (d.subpanels && d.subpanels.length > 0) {
-            const subHtml = d.subpanels.map(renderPanel).join("\n");
+            const subHtml = d.subpanels.map((sp, si) => renderPanel(sp, si)).join("\n");
             const label = d.agentType || "Agent";
             extras += `
               <details class="subagent-details">
@@ -78,7 +92,8 @@ function renderPanel(panel: Panel): string {
         .join("\n            ");
       const summary = panel.lines.map((l) => escapeHtml(l)).join("  ");
       return `
-    <div class="panel action-montage">
+    <div class="panel action-montage" ${attrs}>
+      ${tag}
       <details class="montage-burst">
         <summary class="montage-summary">${summary}</summary>
         <ul class="montage-details">
@@ -90,7 +105,8 @@ function renderPanel(panel: Panel): string {
 
     case "notification":
       return `
-    <div class="panel notification">
+    <div class="panel notification" ${attrs}>
+      ${tag}
       <div class="notification-box">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
       </div>
@@ -98,7 +114,8 @@ function renderPanel(panel: Panel): string {
 
     case "narrator":
       return `
-    <div class="panel narrator">
+    <div class="panel narrator" ${attrs}>
+      ${tag}
       <div class="narrator-box">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
       </div>
@@ -107,7 +124,7 @@ function renderPanel(panel: Panel): string {
 }
 
 export function generateHtml(panels: Panel[], title: string): string {
-  const panelHtml = panels.map(renderPanel).join("\n");
+  const panelHtml = panels.map((p, i) => renderPanel(p, i)).join("\n");
 
   return `<!DOCTYPE html>
 <html lang="en">

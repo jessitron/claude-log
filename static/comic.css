@@ -70,6 +70,24 @@ body {
   position: relative;
 }
 
+/* Source tag — small line-number label for referencing panels */
+.source-tag {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.6rem;
+  color: #534b8a;
+  opacity: 0.5;
+  cursor: default;
+  user-select: all; /* click to select for easy copy */
+}
+
+.source-tag:hover {
+  opacity: 1;
+  color: #7ec8e3;
+}
+
 /* === Human speech === */
 .human-speech {
   align-self: flex-start;
