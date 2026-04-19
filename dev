@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Live-reload dev server for iterating on comic CSS.
+# See scripts/dev-server.js for details.
+set -euo pipefail
+
+cd "$(dirname "$0")"
+exec node scripts/dev-server.js
