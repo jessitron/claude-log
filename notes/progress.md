@@ -24,9 +24,6 @@
 - Any visualization (Honeycomb traces, comic strip, swim lane, etc.)
 - No test suite yet
 
-### mtg-sparrow logs
-Jessitron mentioned checking mtg-sparrow conversations for Claude Teams discussion — those 57 sessions were all about the MTG Sparrow project itself (mtgcolors.quest), no meta-discussion about logs or Teams found there.
-
 ## 2026-04-19: Debug refs for panels
 
 ### What changed
@@ -50,3 +47,18 @@ Added a debug-only reference system so when Jessitron notices a discrepancy in a
 - `npm run parse` runs `main.js` (the schema reporter), not `comic.js` — had to remember to use `npm run comic` to regenerate HTML
 - Earlier attempt made tags visible on hover — Jessitron called that out: do NOT show on hover, the comic gets displayed and refs must stay invisible until explicitly toggled
 - `output/` is gitignored — don't try to commit regenerated HTML
+
+## 2026-04-19: Live-reload dev server for CSS iteration
+
+### What changed
+Added `./dev` (→ `scripts/dev-server.js`) using browser-sync so CSS edits apply instantly in the browser without re-running `./run`.
+
+### How it works
+- browser-sync serves two baseDirs: `static/` first, then `output/`. First match wins, so `/comic.css` resolves to `static/comic.css` — edits to the source CSS are injected live (no reload, scroll preserved)
+- Comic HTML in `output/*.html` is watched too, but those trigger a full page reload (they're generated, not hand-edited)
+- A tiny middleware intercepts `/` to render an index page listing every `output/*.html`. Without it, browser-sync shows a directory listing of `static/` (which only has `comic.css`) and the user can't find the comics
+
+### Gotchas found
+- browser-sync CLI `--server` doesn't cleanly accept multiple baseDirs from shell args — had to use the Node API (`browserSync.create().init({...})`) instead
+- `middleware` must be nested inside `server`, not at the top level of the config — top-level placement silently doesn't run
+- Stale browser-sync processes linger on the port across restarts; `pkill -f browser-sync` clears them
