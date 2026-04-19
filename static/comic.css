@@ -631,8 +631,9 @@ body.show-tokens .token-badge {
 .notification-box::before {
   content: '📬';
   position: absolute;
-  top: -12px;
-  left: 12px;
+  top: 50%;
+  left: -12px;
+  transform: translateY(-50%);
   font-size: 1rem;
 }
 
