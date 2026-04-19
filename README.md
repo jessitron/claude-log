@@ -2,6 +2,8 @@
 
 This project analyzes Claude Code conversation logs to understand Claude's activity during conversations.
 
+**Live comics:** <https://jessitron.github.io/claude-log/>
+
 ## About Claude Code Conversation Logs
 
 Claude Code stores detailed conversation logs in JSONL (JSON Lines) format, where each line is a complete JSON object representing one event in the conversation.
