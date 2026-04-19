@@ -164,6 +164,23 @@ ${panelHtml}
     }
     makeToggle('toggle-actions', 'details.montage-burst', 'Show all actions', 'Hide all actions');
     makeToggle('toggle-outputs', 'details.tool-output-details', 'Show all outputs', 'Hide all outputs');
+
+    document.addEventListener('click', function(e) {
+      const tag = e.target.closest('.source-tag');
+      if (!tag) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const text = tag.textContent;
+      navigator.clipboard.writeText(text).then(function() {
+        const original = tag.textContent;
+        tag.textContent = 'copied!';
+        tag.classList.add('copied');
+        setTimeout(function() {
+          tag.textContent = original;
+          tag.classList.remove('copied');
+        }, 900);
+      });
+    });
   </script>
 </body>
 </html>
