@@ -10,6 +10,13 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// Escape HTML, then promote **bold** to <strong>bold</strong>.
+// Safe because ** survives escapeHtml unchanged, and the replacement only
+// injects our own tags.
+function escapeHtmlWithBold(text: string): string {
+  return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
 function sourceTag(panel: Panel): string {
   const lines = panel.lineNumbers.join(",");
   const file = panel.sourceFile || "";
@@ -62,7 +69,7 @@ function renderPanel(panel: Panel, index: number): string {
       ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
       <div class="character-label">Claude</div>
       <div class="speech-bubble claude-bubble">
-        ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
+        ${panel.lines.map((l) => `<p>${escapeHtmlWithBold(l)}</p>`).join("\n        ")}
       </div>
     </div>`;
 
