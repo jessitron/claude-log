@@ -23,8 +23,17 @@ for jsonl in "${jsonls[@]}"; do
 done
 
 echo
+echo "=== Copying static assets ==="
+cp -R static/. "$OUTPUT_DIR"/
+
+echo
+echo "=== Writing index ==="
+node scripts/make-index.js
+
+echo
 echo "=== Comics ==="
 abs_output="$(cd "$OUTPUT_DIR" && pwd)"
+echo "  file://$abs_output/index.html"
 for jsonl in "${jsonls[@]}"; do
   base="$(basename "$jsonl" .jsonl)"
   html="$abs_output/$base.html"
