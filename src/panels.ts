@@ -24,6 +24,7 @@ export interface ToolDetail {
   subpanels?: Panel[]; // for Agent tools: the subagent's conversation as panels
   agentType?: string;  // e.g. "Explore"
   totalInputTokens?: number; // input_tokens + cache_creation + cache_read for this tool's assistant call
+  outputTokens?: number; // output_tokens generated on this tool's assistant call
 }
 
 export interface Panel {
@@ -34,21 +35,30 @@ export interface Panel {
   lineNumbers: number[]; // source line numbers for traceability
   sourceFile?: string;   // basename of JSONL file these records came from
   totalInputTokens?: number; // for single-record panels: input + cache_creation + cache_read
+  outputTokens?: number; // for single-record panels: output_tokens from usage
+  queued?: boolean;      // rendered from an enqueue or mid-turn async injection;
+                         // hidden by default, revealed via the 'q' toggle
 }
 
-// Total input tokens the model "saw" on this assistant call:
-// fresh input + tokens written to cache + tokens read from cache.
-function extractTotalInputTokens(record: ConversationRecord): number | undefined {
-  if (record.type !== "assistant") return undefined;
+// Per-call token usage. Input total = fresh input + tokens written to cache + tokens read from cache.
+function extractTokenUsage(record: ConversationRecord): {
+  totalInputTokens?: number;
+  outputTokens?: number;
+} {
+  if (record.type !== "assistant") return {};
   const msg = record.raw.message as { usage?: Record<string, unknown> } | undefined;
   const usage = msg?.usage;
-  if (!usage) return undefined;
+  if (!usage) return {};
   const num = (v: unknown) => (typeof v === "number" ? v : 0);
-  const total =
+  const totalInput =
     num(usage.input_tokens) +
     num(usage.cache_creation_input_tokens) +
     num(usage.cache_read_input_tokens);
-  return total > 0 ? total : undefined;
+  const output = num(usage.output_tokens);
+  return {
+    totalInputTokens: totalInput > 0 ? totalInput : undefined,
+    outputTokens: output > 0 ? output : undefined,
+  };
 }
 
 // Records we skip entirely — they're noise for a comic
@@ -230,6 +240,7 @@ export function groupIntoPanels(
     agentType?: string;
     lineNumber: number;
     totalInputTokens?: number;
+    outputTokens?: number;
   }[] = [];
 
   // Notifications that arrive mid-montage get deferred until after the montage flushes
@@ -260,6 +271,7 @@ export function groupIntoPanels(
       subpanels: t.subpanels,
       agentType: t.agentType,
       totalInputTokens: t.totalInputTokens,
+      outputTokens: t.outputTokens,
     }));
     panels.push({
       type: "action-montage",
@@ -277,15 +289,13 @@ export function groupIntoPanels(
     }
   }
 
-  // Track enqueued message content so we can deduplicate when the same text
-  // appears again as a regular "user" record (enqueue = typed while Claude works,
-  // user = the same message processed as a turn).
-  const enqueuedContent = new Set<string>();
-
   for (let i = 0; i < visible.length; i++) {
     const record = visible[i];
 
-    // Enqueued messages: human typing while Claude works
+    // Enqueued messages: human typing while Claude works. Marked queued so the
+    // typed-at-time panel is hidden by default; the same text will re-appear
+    // as a regular "user" record at the dequeued position (where Claude
+    // actually receives it) and that panel renders normally.
     if (record.type === "queue-operation") {
       const content = record.raw.content;
       if (typeof content === "string" && content.trim()) {
@@ -293,16 +303,14 @@ export function groupIntoPanels(
         // record (delivered at next turn) or as a queued_command attachment
         // (injected mid-turn). Emitting from the enqueue would show the
         // notification before Claude has seen it.
-        if (content.includes("<task-notification>")) {
-          // intentionally no-op
-        } else {
+        if (!content.includes("<task-notification>")) {
           // Don't flush montage — this happened *during* the action!
           panels.push({
             type: "human-speech",
             lines: [content],
             lineNumbers: [record.lineNumber],
+            queued: true,
           });
-          enqueuedContent.add(content);
         }
       }
       continue;
@@ -320,6 +328,7 @@ export function groupIntoPanels(
             type: "notification",
             lines: [summaryMatch[1].trim()],
             lineNumbers: [record.lineNumber],
+            queued: true,
           };
           if (pendingTools.length > 0) {
             deferredNotifications.push(notif);
@@ -397,7 +406,7 @@ export function groupIntoPanels(
             type: "claude-think",
             lines: [text.trim()],
             lineNumbers: [record.lineNumber],
-            totalInputTokens: extractTotalInputTokens(record),
+            ...extractTokenUsage(record),
           });
         } else {
           flushMontage();
@@ -405,7 +414,7 @@ export function groupIntoPanels(
             type: "claude-speech",
             lines: [text],
             lineNumbers: [record.lineNumber],
-            totalInputTokens: extractTotalInputTokens(record),
+            ...extractTokenUsage(record),
           });
         }
       } else if (block.type === "thinking") {
@@ -416,7 +425,7 @@ export function groupIntoPanels(
             type: "claude-think",
             lines: [truncate(thinking, 300)],
             lineNumbers: [record.lineNumber],
-            totalInputTokens: extractTotalInputTokens(record),
+            ...extractTokenUsage(record),
           });
         }
       } else if (block.type === "tool_use") {
@@ -444,7 +453,7 @@ export function groupIntoPanels(
           subpanels: agentSubpanels,
           agentType,
           lineNumber: record.lineNumber,
-          totalInputTokens: extractTotalInputTokens(record),
+          ...extractTokenUsage(record),
         });
       }
       continue;

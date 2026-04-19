@@ -18,10 +18,16 @@ function sourceTag(panel: Panel): string {
   return `<span class="source-tag" title="${escapeHtml(title)}">${escapeHtml(ref)}</span>`;
 }
 
-function tokenBadge(tokens: number | undefined): string {
-  if (tokens === undefined) return "";
-  const label = `${tokens.toLocaleString()} in`;
-  const title = `${tokens.toLocaleString()} total input tokens sent on this turn`;
+function tokenBadge(inputTokens: number | undefined, outputTokens: number | undefined): string {
+  if (inputTokens === undefined && outputTokens === undefined) return "";
+  const parts: string[] = [];
+  if (inputTokens !== undefined) parts.push(`${inputTokens.toLocaleString()} in`);
+  if (outputTokens !== undefined) parts.push(`${outputTokens.toLocaleString()} out`);
+  const label = parts.join(" / ");
+  const titleParts: string[] = [];
+  if (inputTokens !== undefined) titleParts.push(`${inputTokens.toLocaleString()} total input tokens sent`);
+  if (outputTokens !== undefined) titleParts.push(`${outputTokens.toLocaleString()} output tokens generated`);
+  const title = titleParts.join(" · ") + " on this turn";
   return `<span class="token-badge" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
 }
 
@@ -48,7 +54,7 @@ function renderPanel(panel: Panel, index: number): string {
       return `
     <div class="panel claude-speech" ${attrs}>
       ${tag}
-      ${tokenBadge(panel.totalInputTokens)}
+      ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
       <div class="character-label">Claude</div>
       <div class="speech-bubble claude-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
@@ -59,7 +65,7 @@ function renderPanel(panel: Panel, index: number): string {
       return `
     <div class="panel claude-think" ${attrs}>
       ${tag}
-      ${tokenBadge(panel.totalInputTokens)}
+      ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
       <div class="thought-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
       </div>
@@ -71,7 +77,7 @@ function renderPanel(panel: Panel, index: number): string {
         .filter((d) => d.summary)
         .map((d) => {
           const lines = d.summary.split("\n");
-          const badge = tokenBadge(d.totalInputTokens);
+          const badge = tokenBadge(d.totalInputTokens, d.outputTokens);
           const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}${badge ? " " + badge : ""}`;
           const rest = lines.slice(1).map((l) => `<span class="tool-command">${escapeHtml(l)}</span>`);
           const mainContent = [first, ...rest].join("\n              ");
