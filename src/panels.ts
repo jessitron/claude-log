@@ -23,6 +23,7 @@ export interface ToolDetail {
   output?: string; // tool result output, if available
   subpanels?: Panel[]; // for Agent tools: the subagent's conversation as panels
   agentType?: string;  // e.g. "Explore"
+  totalInputTokens?: number; // input_tokens + cache_creation + cache_read for this tool's assistant call
 }
 
 export interface Panel {
@@ -32,6 +33,22 @@ export interface Panel {
   toolDetails?: ToolDetail[]; // per-tool detail for expandable view
   lineNumbers: number[]; // source line numbers for traceability
   sourceFile?: string;   // basename of JSONL file these records came from
+  totalInputTokens?: number; // for single-record panels: input + cache_creation + cache_read
+}
+
+// Total input tokens the model "saw" on this assistant call:
+// fresh input + tokens written to cache + tokens read from cache.
+function extractTotalInputTokens(record: ConversationRecord): number | undefined {
+  if (record.type !== "assistant") return undefined;
+  const msg = record.raw.message as { usage?: Record<string, unknown> } | undefined;
+  const usage = msg?.usage;
+  if (!usage) return undefined;
+  const num = (v: unknown) => (typeof v === "number" ? v : 0);
+  const total =
+    num(usage.input_tokens) +
+    num(usage.cache_creation_input_tokens) +
+    num(usage.cache_read_input_tokens);
+  return total > 0 ? total : undefined;
 }
 
 // Records we skip entirely — they're noise for a comic
@@ -212,6 +229,7 @@ export function groupIntoPanels(
     subpanels?: Panel[];
     agentType?: string;
     lineNumber: number;
+    totalInputTokens?: number;
   }[] = [];
 
   // Notifications that arrive mid-montage get deferred until after the montage flushes
@@ -241,6 +259,7 @@ export function groupIntoPanels(
       output: t.output,
       subpanels: t.subpanels,
       agentType: t.agentType,
+      totalInputTokens: t.totalInputTokens,
     }));
     panels.push({
       type: "action-montage",
@@ -378,6 +397,7 @@ export function groupIntoPanels(
             type: "claude-think",
             lines: [text.trim()],
             lineNumbers: [record.lineNumber],
+            totalInputTokens: extractTotalInputTokens(record),
           });
         } else {
           flushMontage();
@@ -385,6 +405,7 @@ export function groupIntoPanels(
             type: "claude-speech",
             lines: [text],
             lineNumbers: [record.lineNumber],
+            totalInputTokens: extractTotalInputTokens(record),
           });
         }
       } else if (block.type === "thinking") {
@@ -395,6 +416,7 @@ export function groupIntoPanels(
             type: "claude-think",
             lines: [truncate(thinking, 300)],
             lineNumbers: [record.lineNumber],
+            totalInputTokens: extractTotalInputTokens(record),
           });
         }
       } else if (block.type === "tool_use") {
@@ -422,6 +444,7 @@ export function groupIntoPanels(
           subpanels: agentSubpanels,
           agentType,
           lineNumber: record.lineNumber,
+          totalInputTokens: extractTotalInputTokens(record),
         });
       }
       continue;

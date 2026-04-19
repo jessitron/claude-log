@@ -18,6 +18,13 @@ function sourceTag(panel: Panel): string {
   return `<span class="source-tag" title="${escapeHtml(title)}">${escapeHtml(ref)}</span>`;
 }
 
+function tokenBadge(tokens: number | undefined): string {
+  if (tokens === undefined) return "";
+  const label = `${tokens.toLocaleString()} in`;
+  const title = `${tokens.toLocaleString()} total input tokens sent on this turn`;
+  return `<span class="token-badge" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
+}
+
 function panelAttrs(panel: Panel, index: number): string {
   const file = panel.sourceFile ? ` data-source-file="${escapeHtml(panel.sourceFile)}"` : "";
   return `data-panel="${index}" data-source-lines="${panel.lineNumbers.join(",")}"${file}`;
@@ -41,6 +48,7 @@ function renderPanel(panel: Panel, index: number): string {
       return `
     <div class="panel claude-speech" ${attrs}>
       ${tag}
+      ${tokenBadge(panel.totalInputTokens)}
       <div class="character-label">Claude</div>
       <div class="speech-bubble claude-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
@@ -51,6 +59,7 @@ function renderPanel(panel: Panel, index: number): string {
       return `
     <div class="panel claude-think" ${attrs}>
       ${tag}
+      ${tokenBadge(panel.totalInputTokens)}
       <div class="thought-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
       </div>
@@ -62,7 +71,8 @@ function renderPanel(panel: Panel, index: number): string {
         .filter((d) => d.summary)
         .map((d) => {
           const lines = d.summary.split("\n");
-          const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}`;
+          const badge = tokenBadge(d.totalInputTokens);
+          const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}${badge ? " " + badge : ""}`;
           const rest = lines.slice(1).map((l) => `<span class="tool-command">${escapeHtml(l)}</span>`);
           const mainContent = [first, ...rest].join("\n              ");
 
@@ -146,6 +156,7 @@ export function generateHtml(panels: Panel[], title: string): string {
         <button id="toggle-actions" class="toggle-btn">Show all actions</button>
         <button id="toggle-outputs" class="toggle-btn">Show all outputs</button>
         <button id="toggle-refs" class="toggle-btn" title="Hotkey: r">Show refs <kbd>r</kbd></button>
+        <button id="toggle-tokens" class="toggle-btn" title="Hotkey: t">Show tokens <kbd>t</kbd></button>
       </div>
     </div>
 ${panelHtml}
@@ -166,21 +177,23 @@ ${panelHtml}
     makeToggle('toggle-actions', 'details.montage-burst', 'Show all actions', 'Hide all actions');
     makeToggle('toggle-outputs', 'details.tool-output-details', 'Show all outputs', 'Hide all outputs');
 
-    (function() {
-      const btn = document.getElementById('toggle-refs');
-      function toggleRefs() {
-        const on = document.body.classList.toggle('show-refs');
-        btn.innerHTML = (on ? 'Hide refs ' : 'Show refs ') + '<kbd>r</kbd>';
+    function hotkeyToggle(buttonId, bodyClass, hotkey, showText, hideText) {
+      const btn = document.getElementById(buttonId);
+      function toggle() {
+        const on = document.body.classList.toggle(bodyClass);
+        btn.innerHTML = (on ? hideText : showText) + ' <kbd>' + hotkey + '</kbd>';
       }
-      btn.addEventListener('click', toggleRefs);
+      btn.addEventListener('click', toggle);
       document.addEventListener('keydown', function(e) {
-        if (e.key !== 'r' || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key !== hotkey || e.ctrlKey || e.metaKey || e.altKey) return;
         const t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
         e.preventDefault();
-        toggleRefs();
+        toggle();
       });
-    })();
+    }
+    hotkeyToggle('toggle-refs', 'show-refs', 'r', 'Show refs', 'Hide refs');
+    hotkeyToggle('toggle-tokens', 'show-tokens', 't', 'Show tokens', 'Hide tokens');
 
     document.addEventListener('click', function(e) {
       const tag = e.target.closest('.source-tag');
