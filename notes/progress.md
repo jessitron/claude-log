@@ -62,3 +62,18 @@ Added `./dev` (→ `scripts/dev-server.js`) using browser-sync so CSS edits appl
 - browser-sync CLI `--server` doesn't cleanly accept multiple baseDirs from shell args — had to use the Node API (`browserSync.create().init({...})`) instead
 - `middleware` must be nested inside `server`, not at the top level of the config — top-level placement silently doesn't run
 - Stale browser-sync processes linger on the port across restarts; `pkill -f browser-sync` clears them
+
+## 2026-04-19: Tool output open by default; typography choice
+
+### What changed
+- Tool output inside action-montage expansions now renders `<details open>` by default — once you open the montage, you almost always want to see the output. Added a small `[−]` button anchored upper-right of the `<pre>` to minimize; when closed it collapses to a `[+] output` pill.
+- "Show all outputs" header button flipped to default-on ("Hide all outputs"). `makeToggle` grew an optional `initialExpanded` param.
+
+### Typography preference (important, don't re-litigate)
+- **Speech bubbles** (human + claude) use `var(--font-dialogue)` = Comic Sans. This reads as spoken dialogue and gives the right comic-book impression.
+- **Thought bubbles** use `var(--font-body)` = Sen (still italic). Cleaner than Comic Sans italic, feels like internal deliberation.
+- Jessitron explicitly chose this split after trying Sen everywhere. If asked to try a different font across the comic, ask before changing speech bubbles — thought bubbles are more flexible.
+
+### Files touched
+- `src/html-generator.ts` — added `open` to `<details class="tool-output-details">`, emptied the summary text (CSS renders `[−]` / `[+] output` via pseudo-elements), flipped the outputs-toggle default, `makeToggle` takes `initialExpanded`
+- `static/comic.css` — `.tool-output-details` positioned relative; summary styled differently for `[open]` vs `:not([open])` via `::before` content
