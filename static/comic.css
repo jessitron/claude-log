@@ -73,19 +73,22 @@ body {
 /* Source tag — small line-number label for referencing panels */
 .source-tag {
   position: absolute;
-  top: 2px;
-  right: 6px;
+  top: -8px;
+  right: 8px;
   font-family: 'Courier New', monospace;
-  font-size: 0.6rem;
-  color: #534b8a;
-  opacity: 0.5;
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: #fff;
+  background: #534b8a;
+  padding: 1px 6px;
+  border-radius: 3px;
+  z-index: 10;
   cursor: default;
   user-select: all; /* click to select for easy copy */
 }
 
 .source-tag:hover {
-  opacity: 1;
-  color: #7ec8e3;
+  background: #e94560;
 }
 
 /* === Human speech === */
