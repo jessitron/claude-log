@@ -145,7 +145,7 @@ export function generateHtml(panels: Panel[], title: string): string {
       <div class="toggle-bar">
         <button id="toggle-actions" class="toggle-btn">Show all actions</button>
         <button id="toggle-outputs" class="toggle-btn">Show all outputs</button>
-        <button id="toggle-refs" class="toggle-btn">Show refs</button>
+        <button id="toggle-refs" class="toggle-btn" title="Hotkey: r">Show refs <kbd>r</kbd></button>
       </div>
     </div>
 ${panelHtml}
@@ -168,9 +168,17 @@ ${panelHtml}
 
     (function() {
       const btn = document.getElementById('toggle-refs');
-      btn.addEventListener('click', function() {
+      function toggleRefs() {
         const on = document.body.classList.toggle('show-refs');
-        btn.textContent = on ? 'Hide refs' : 'Show refs';
+        btn.innerHTML = (on ? 'Hide refs ' : 'Show refs ') + '<kbd>r</kbd>';
+      }
+      btn.addEventListener('click', toggleRefs);
+      document.addEventListener('keydown', function(e) {
+        if (e.key !== 'r' || e.ctrlKey || e.metaKey || e.altKey) return;
+        const t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        e.preventDefault();
+        toggleRefs();
       });
     })();
 

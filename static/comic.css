@@ -63,6 +63,18 @@ body {
   color: #b8e0f0;
 }
 
+.toggle-btn kbd {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border: 1px solid #3282b8;
+  border-radius: 3px;
+  background: #16213e;
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: #b8e0f0;
+}
+
 /* Panels — the basic building block */
 .panel {
   padding: 16px 20px;
