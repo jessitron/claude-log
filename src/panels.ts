@@ -40,7 +40,15 @@ function isSkippable(record: ConversationRecord): boolean {
   if (record.type === "file-history-snapshot") return true;
   // queue-operation "enqueue" = human typed while Claude was working. Show those!
   if (record.type === "queue-operation" && record.raw.operation !== "enqueue") return true;
-  if (record.type === "attachment") return true;
+  if (record.type === "attachment") {
+    // Task-notification attachments are how Claude "sees" a background-task
+    // completion that arrived mid-turn. Keep those; skip everything else.
+    const att = record.raw.attachment as { type?: string; commandMode?: string } | undefined;
+    if (att?.type === "queued_command" && att?.commandMode === "task-notification") {
+      return false;
+    }
+    return true;
+  }
   // user records that are tool results or meta (system reminders, etc.)
   if (record.type === "user" && record.raw.toolUseResult) return true;
   if (record.type === "user" && record.raw.isMeta) return true;
@@ -262,9 +270,10 @@ export function groupIntoPanels(
     if (record.type === "queue-operation") {
       const content = record.raw.content;
       if (typeof content === "string" && content.trim()) {
-        // Task notifications: skip here — they'll re-appear as a user record
-        // when Claude actually receives them. Emitting from the enqueue would
-        // show the notification before Claude has seen it.
+        // Task notifications: skip here — they re-appear either as a user
+        // record (delivered at next turn) or as a queued_command attachment
+        // (injected mid-turn). Emitting from the enqueue would show the
+        // notification before Claude has seen it.
         if (content.includes("<task-notification>")) {
           // intentionally no-op
         } else {
@@ -275,6 +284,29 @@ export function groupIntoPanels(
             lineNumbers: [record.lineNumber],
           });
           enqueuedContent.add(content);
+        }
+      }
+      continue;
+    }
+
+    // Task-notification attachments: injected mid-turn when a background task
+    // completes while Claude is already running. This is the "Claude sees it"
+    // moment, equivalent to a user-record-wrapped task-notification.
+    if (record.type === "attachment") {
+      const att = record.raw.attachment as { type?: string; commandMode?: string; prompt?: string } | undefined;
+      if (att?.type === "queued_command" && att?.commandMode === "task-notification" && typeof att.prompt === "string") {
+        const summaryMatch = att.prompt.match(/<summary>(.*?)<\/summary>/s);
+        if (summaryMatch) {
+          const notif: Panel = {
+            type: "notification",
+            lines: [summaryMatch[1].trim()],
+            lineNumbers: [record.lineNumber],
+          };
+          if (pendingTools.length > 0) {
+            deferredNotifications.push(notif);
+          } else {
+            panels.push(notif);
+          }
         }
       }
       continue;
