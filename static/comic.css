@@ -67,7 +67,7 @@ body {
   color: var(--grace-blue);
   padding: 6px 14px;
   border-radius: 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 0.85rem;
   font-weight: bold;
   cursor: pointer;
@@ -136,7 +136,7 @@ body.show-refs .source-tag {
   top: 4px;
   right: 100%;
   margin-right: 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 0.7rem;
   font-weight: bold;
   color: var(--deep-navy);
@@ -434,7 +434,7 @@ body.show-tokens .token-badge {
   cursor: pointer;
   list-style: none;
   padding-top: 8px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
 }
 
 .spawn-agent-summary::-webkit-details-marker {
@@ -442,7 +442,7 @@ body.show-tokens .token-badge {
 }
 
 .spawn-agent-type {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 0.7rem;
   font-weight: bold;
   letter-spacing: 1px;
@@ -541,18 +541,51 @@ body.show-tokens .token-badge {
 
 .tool-output-details {
   margin-top: 4px;
+  position: relative;
 }
 
 .tool-output-toggle {
   cursor: pointer;
   color: var(--grace-blue);
-  font-size: 0.85rem;
   font-weight: bold;
+  font-family: var(--font-mono);
+  list-style: none;
+}
+
+.tool-output-toggle::-webkit-details-marker {
+  display: none;
+}
+
+/* Open: overlay a small [−] button in the upper-right of the output pre. */
+.tool-output-details[open] > .tool-output-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 2px 6px;
+  border: 1px solid var(--grace-blue);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.tool-output-details[open] > .tool-output-toggle::before {
+  content: "[−]";
+}
+
+/* Closed: inline "[+] output" pill. */
+.tool-output-details:not([open]) > .tool-output-toggle {
+  display: inline-block;
+  font-size: 0.85rem;
   padding: 2px 8px;
   border: 1px solid var(--grace-blue);
   border-radius: 4px;
-  display: inline-block;
   margin-top: 4px;
+}
+
+.tool-output-details:not([open]) > .tool-output-toggle::before {
+  content: "[+] output";
 }
 
 .tool-output-toggle:hover {
@@ -565,10 +598,11 @@ body.show-tokens .token-badge {
   border: 1px solid var(--grace-blue);
   border-radius: 4px;
   padding: 12px;
-  margin-top: 6px;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   line-height: 1.5;
   color: var(--deep-navy);
+  margin-top: 6px;
   overflow-x: auto;
   max-height: 400px;
   overflow-y: auto;
@@ -649,7 +683,7 @@ body.show-tokens .token-badge {
   border: 2px solid var(--grace-blue);
   border-radius: 12px;
   text-align: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   color: var(--deep-navy);
 }
 
@@ -662,6 +696,7 @@ body.show-tokens .token-badge {
 }
 
 .conversation-totals .totals-numbers {
+  font-family: var(--font-mono);
   font-size: 1rem;
   display: flex;
   flex-wrap: wrap;

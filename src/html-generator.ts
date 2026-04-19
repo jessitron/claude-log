@@ -109,12 +109,12 @@ function renderPanel(panel: Panel, index: number): string {
               </details>`;
           }
 
-          // Tool output
+          // Tool output — open by default; the [−] summary minimizes it.
           if (d.output) {
             const truncatedOutput = d.output.length > 2000 ? d.output.slice(0, 2000) + "\n…" : d.output;
             extras += `
-              <details class="tool-output-details">
-                <summary class="tool-output-toggle">output</summary>
+              <details class="tool-output-details" open>
+                <summary class="tool-output-toggle" title="Toggle output"></summary>
                 <pre class="tool-output">${escapeHtml(truncatedOutput)}</pre>
               </details>`;
           }
@@ -223,7 +223,7 @@ export function generateHtml(
       <h1>${escapeHtml(title)}</h1>
       <div class="toggle-bar">
         <button id="toggle-actions" class="toggle-btn">Show all actions</button>
-        <button id="toggle-outputs" class="toggle-btn">Show all outputs</button>
+        <button id="toggle-outputs" class="toggle-btn">Hide all outputs</button>
         <button id="toggle-refs" class="toggle-btn" title="Hotkey: r">Show refs <kbd>r</kbd></button>
         <button id="toggle-tokens" class="toggle-btn" title="Hotkey: t">Show tokens <kbd>t</kbd></button>
         <button id="toggle-queued" class="toggle-btn" title="Hotkey: q">Show queued <kbd>q</kbd></button>
@@ -233,9 +233,10 @@ ${panelHtml}
     <div class="comic-end">fin.</div>${totalsHtml}
   </div>
   <script>
-    function makeToggle(buttonId, selector, showText, hideText) {
+    function makeToggle(buttonId, selector, showText, hideText, initialExpanded) {
       const btn = document.getElementById(buttonId);
-      let expanded = false;
+      let expanded = initialExpanded || false;
+      btn.textContent = expanded ? hideText : showText;
       btn.addEventListener('click', function() {
         expanded = !expanded;
         btn.textContent = expanded ? hideText : showText;
@@ -245,7 +246,7 @@ ${panelHtml}
       });
     }
     makeToggle('toggle-actions', 'details.montage-burst', 'Show all actions', 'Hide all actions');
-    makeToggle('toggle-outputs', 'details.tool-output-details', 'Show all outputs', 'Hide all outputs');
+    makeToggle('toggle-outputs', 'details.tool-output-details', 'Show all outputs', 'Hide all outputs', true);
 
     function hotkeyToggle(buttonId, bodyClass, hotkey, showText, hideText) {
       const btn = document.getElementById(buttonId);
