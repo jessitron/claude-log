@@ -145,6 +145,7 @@ export function generateHtml(panels: Panel[], title: string): string {
       <div class="toggle-bar">
         <button id="toggle-actions" class="toggle-btn">Show all actions</button>
         <button id="toggle-outputs" class="toggle-btn">Show all outputs</button>
+        <button id="toggle-refs" class="toggle-btn">Show refs</button>
       </div>
     </div>
 ${panelHtml}
@@ -164,6 +165,14 @@ ${panelHtml}
     }
     makeToggle('toggle-actions', 'details.montage-burst', 'Show all actions', 'Hide all actions');
     makeToggle('toggle-outputs', 'details.tool-output-details', 'Show all outputs', 'Hide all outputs');
+
+    (function() {
+      const btn = document.getElementById('toggle-refs');
+      btn.addEventListener('click', function() {
+        const on = document.body.classList.toggle('show-refs');
+        btn.textContent = on ? 'Hide refs' : 'Show refs';
+      });
+    })();
 
     document.addEventListener('click', function(e) {
       const tag = e.target.closest('.source-tag');
