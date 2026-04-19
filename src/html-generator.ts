@@ -56,10 +56,10 @@ function renderPanel(panel: Panel, index: number): string {
       return `
     <div class="panel human-speech${q}" ${attrs}>
       ${tag}
-      <div class="character-label">Human</div>
       <div class="speech-bubble human-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
       </div>
+      <img class="character-avatar human-avatar" src="blue-tooth-person.png" alt="Human">
     </div>`;
 
     case "claude-speech":
@@ -67,7 +67,7 @@ function renderPanel(panel: Panel, index: number): string {
     <div class="panel claude-speech" ${attrs}>
       ${tag}
       ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
-      <div class="character-label">Claude</div>
+      <img class="character-avatar robot-avatar" src="robot.png" alt="Claude">
       <div class="speech-bubble claude-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtmlWithBold(l)}</p>`).join("\n        ")}
       </div>
@@ -135,6 +135,31 @@ function renderPanel(panel: Panel, index: number): string {
     </div>`;
     }
 
+    case "spawn-agent": {
+      const d = panel.toolDetails?.[0];
+      const sub = d?.subpanels ?? [];
+      const agentType = d?.agentType || "Agent";
+      const title = d?.summary?.trim() || agentType;
+      const activityCount = sub.length;
+      const msgLabel = `${activityCount} ${activityCount === 1 ? "activity" : "activities"}`;
+      const subHtml = sub.map((sp, si) => renderPanel(sp, si)).join("\n");
+      return `
+    <div class="panel spawn-agent" ${attrs}>
+      ${tag}
+      ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
+      <details class="spawn-agent-burst">
+        <summary class="spawn-agent-summary">
+          <span class="spawn-agent-type">${escapeHtml(agentType)}</span>
+          <span class="spawn-agent-title">${escapeHtml(title)}</span>
+          <span class="spawn-agent-count">${msgLabel}</span>
+        </summary>
+        <div class="subagent-comic">
+          ${subHtml}
+        </div>
+      </details>
+    </div>`;
+    }
+
     case "notification":
       return `
     <div class="panel notification${q}" ${attrs}>
@@ -187,6 +212,9 @@ export function generateHtml(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cascadia+Code:wght@400;700&family=Sen:wght@400;700&family=Tenor+Sans&display=swap">
   <link rel="stylesheet" href="comic.css">
 </head>
 <body>

@@ -1,5 +1,20 @@
 /* Webtoon-style comic strip for Claude Code conversations */
 
+/* Lotus Opening palette — Graceful.Dev brand colors.
+   See notes/graceful-dev-design.md. */
+:root {
+  --dancing-red: #A6142f;
+  --deep-navy: #0D1940;
+  --grace-blue: #3772A6;
+  --faith-yellow: #F2CE1B;
+  --joy-orange: #F28444;
+
+  --font-title: 'Tenor Sans', Georgia, serif;
+  --font-body: 'Sen', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Cascadia Code', 'Courier New', monospace;
+  --font-dialogue: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', cursive, sans-serif;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -7,9 +22,9 @@
 }
 
 body {
-  background: #1a1a2e;
-  color: #eee;
-  font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', cursive, sans-serif;
+  background: #fff;
+  color: var(--deep-navy);
+  font-family: var(--font-body);
   min-height: 100vh;
 }
 
@@ -19,22 +34,22 @@ body {
   padding: 20px 40px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 /* Title */
 .comic-title {
   text-align: center;
   padding: 30px 20px;
-  background: #16213e;
-  border: 3px solid #e94560;
+  background: #fff;
+  border: 3px solid var(--dancing-red);
   border-radius: 16px;
   margin-bottom: 12px;
 }
 
 .comic-title h1 {
+  font-family: var(--font-title);
   font-size: 1.8rem;
-  color: #e94560;
+  color: var(--dancing-red);
   text-transform: uppercase;
   letter-spacing: 2px;
 }
@@ -47,37 +62,37 @@ body {
 }
 
 .toggle-btn {
-  background: #0f3460;
-  border: 1px solid #3282b8;
-  color: #7ec8e3;
+  background: #fff;
+  border: 1px solid var(--grace-blue);
+  color: var(--grace-blue);
   padding: 6px 14px;
   border-radius: 6px;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: bold;
   cursor: pointer;
 }
 
 .toggle-btn:hover {
-  background: #1a4a7a;
-  color: #b8e0f0;
+  background: #eaf1f7;
+  color: var(--deep-navy);
 }
 
 .toggle-btn kbd {
   display: inline-block;
   margin-left: 4px;
   padding: 1px 5px;
-  border: 1px solid #3282b8;
+  border: 1px solid var(--grace-blue);
   border-radius: 3px;
-  background: #16213e;
+  background: #f4f7fa;
   font-family: inherit;
   font-size: 0.75rem;
-  color: #b8e0f0;
+  color: var(--deep-navy);
 }
 
 /* Panels — the basic building block */
 .panel {
-  padding: 16px 20px;
+  padding: 8px 20px;
   border-radius: 12px;
   position: relative;
 }
@@ -87,7 +102,7 @@ body {
   position: absolute;
   top: -8px;
   right: 8px;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: bold;
   color: #fff;
@@ -105,27 +120,32 @@ body.show-refs .source-tag {
 }
 
 .source-tag:hover {
-  background: #e94560;
+  background: var(--dancing-red);
 }
 
 .source-tag.copied {
   background: #4a8a4a;
 }
 
-/* Token badge — total input tokens sent on this turn. Hidden unless body.show-tokens is set. */
+/* Token badge — total input tokens sent on this turn. Hidden unless body.show-tokens is set.
+   Positioned absolutely to the LEFT of the panel so that when tokens are toggled on
+   they don't reshape the layout — they just appear in the left margin / overlap
+   whatever is there. This means no whitespace needs to be reserved for them. */
 .token-badge {
   position: absolute;
-  top: -8px;
-  left: 8px;
-  font-family: 'Courier New', monospace;
+  top: 4px;
+  right: 100%;
+  margin-right: 6px;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: bold;
-  color: #1a1a2e;
-  background: #f0c674;
+  color: var(--deep-navy);
+  background: var(--faith-yellow);
   padding: 1px 6px;
   border-radius: 3px;
   z-index: 10;
   user-select: none;
+  white-space: nowrap;
   display: none;
 }
 
@@ -137,12 +157,28 @@ body.show-tokens .token-badge {
 .montage-details .token-badge {
   position: static;
   margin-left: 6px;
+  margin-right: 0;
 }
 
 /* === Human speech === */
 .human-speech {
   align-self: flex-start;
-  max-width: 50%;
+  max-width: 55%;
+}
+
+.character-avatar {
+  width: auto;
+  display: block;
+}
+
+/* Avatar is taken out of flow so the human's picture doesn't push
+   subsequent (right-side) Claude panels downward. It hangs below
+   the bubble into whatever empty space is next on the left. */
+.human-avatar {
+  position: absolute;
+  top: 100%;
+  left: 26px;
+  height: 90px;
 }
 
 .character-label {
@@ -160,43 +196,58 @@ body.show-tokens .token-badge {
   border-radius: 18px;
   position: relative;
   line-height: 1.5;
+  font-family: var(--font-dialogue);
 }
 
 .human-bubble {
-  background: #0f3460;
-  border: 2px solid #3282b8;
-  color: #e8e8e8;
+  background: #fff;
+  border: 2px solid var(--grace-blue);
+  color: var(--deep-navy);
 }
 
 .human-bubble::after {
   content: '';
   position: absolute;
-  top: 14px;
-  left: -10px;
+  bottom: -12px;
+  left: 28px;
   border: 6px solid transparent;
-  border-right-color: #3282b8;
+  border-top-color: var(--grace-blue);
 }
 
 /* === Claude speech === */
 .claude-speech {
   align-self: flex-end;
-  max-width: 50%;
+  max-width: 55%;
   margin-right: 30%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.robot-avatar {
+  height: 90px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.claude-speech .speech-bubble {
+  flex: 1;
+  min-width: 0;
 }
 
 .claude-bubble {
-  background: #1a1a40;
-  border: 2px solid #e94560;
-  color: #f0f0f0;
+  background: #fff;
+  border: 2px solid var(--dancing-red);
+  color: var(--deep-navy);
 }
 
 .claude-bubble::after {
   content: '';
   position: absolute;
   top: 14px;
-  right: -10px;
+  left: -12px;
   border: 6px solid transparent;
-  border-left-color: #e94560;
+  border-right-color: var(--dancing-red);
 }
 
 .speech-bubble p {
@@ -212,18 +263,18 @@ body.show-tokens .token-badge {
 /* === Thinking === */
 .claude-think {
   align-self: flex-end;
-  max-width: 50%;
-  margin-right: 30%;
+  width: 55%;
   z-index: 2;
   position: relative;
 }
 
 .thought-bubble {
-  background: #16213e;
-  border: 2px dashed #534b8a;
-  border-radius: 24px;
+  background: #eaf1f7;
+  border: 2px dotted var(--grace-blue);
+  border-radius: 18px;
   padding: 12px 18px;
-  color: #a89fd4;
+  color: var(--deep-navy);
+  font-family: var(--font-dialogue);
   font-style: italic;
   font-size: 0.9rem;
   line-height: 1.4;
@@ -233,8 +284,8 @@ body.show-tokens .token-badge {
 .thought-bubble::before {
   content: '💭';
   position: absolute;
-  top: -14px;
-  right: 16px;
+  bottom: -14px;
+  left: 16px;
   font-size: 1.2rem;
 }
 
@@ -254,16 +305,22 @@ body.show-tokens .token-badge {
   position: relative;
 }
 
-/* When a think bubble is immediately followed by an action montage,
-   pull the montage up behind the thought — action happening in the background */
+/* Leave a little room between a thought and the action that follows it:
+   the 💭 tail hangs 14px below the bubble and the "⚡ ACTION ⚡" banner
+   sits 12px above the burst. Enough margin to avoid a bad collision,
+   not so much that the panels feel disconnected. */
 .claude-think + .action-montage {
-  margin-top: -30px;
+  margin-top: 6px;
   z-index: 0;
 }
 
+.subagent-comic .claude-think + .action-montage {
+  margin-top: 8px;
+}
+
 .montage-burst {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  border: 3px solid #e94560;
+  background: linear-gradient(135deg, #fff 0%, #fff7e6 50%, #fde9d6 100%);
+  border: 3px solid var(--dancing-red);
   border-radius: 8px;
   padding: 20px 16px 12px 16px;
   position: relative;
@@ -276,11 +333,10 @@ body.show-tokens .token-badge {
   justify-content: center;
   cursor: pointer;
   list-style: none;
-  padding-top: 8px;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-weight: bold;
   font-size: 0.85rem;
-  color: #7ec8e3;
+  color: var(--dancing-red);
 }
 
 .montage-summary::-webkit-details-marker {
@@ -293,7 +349,7 @@ body.show-tokens .token-badge {
   top: -12px;
   left: 50%;
   transform: translateX(-50%);
-  background: #e94560;
+  background: var(--dancing-red);
   color: #fff;
   font-size: 0.7rem;
   font-weight: bold;
@@ -306,25 +362,115 @@ body.show-tokens .token-badge {
   list-style: none;
   padding: 8px 0 0 0;
   margin: 8px 0 0 0;
-  border-top: 1px solid #3282b8;
+  border-top: 1px solid var(--grace-blue);
 }
 
 .montage-details li {
   padding: 3px 0;
   font-size: 0.8rem;
-  color: #9ec8e3;
-  font-family: 'Courier New', monospace;
+  color: var(--deep-navy);
+  font-family: var(--font-mono);
 }
 
 .montage-details strong {
-  color: #7ec8e3;
+  color: var(--grace-blue);
 }
 
 .tool-command {
   display: block;
-  color: #6ba386;
+  color: #3b7a5a;
   margin-top: 2px;
   padding-left: 8px;
+}
+
+/* === Spawn Agent panel — for Agent tool calls that spawn a subagent.
+   Collapsed: matches an action-montage (55% right-aligned) so it tucks into
+   the normal right-hand column. Expanded: widens leftward to the Claude
+   bubble's left edge, giving the nested comic room to breathe. Alignment math
+   (expanded):
+     claude-speech container left = 100% − 30% (margin-right) − 55% (max-width) = 15%
+     inside, the robot (~66px wide at 90px tall, aspect 181/246) + 10px gap
+     inset the bubble another ~76px. */
+.spawn-agent {
+  align-self: flex-end;
+  width: 55%;
+  margin-right: 0;
+  transition: width 260ms ease;
+}
+
+.spawn-agent:has(.spawn-agent-burst[open]) {
+  width: calc(85% - 76px);
+}
+
+.spawn-agent-burst {
+  background: linear-gradient(135deg, #fff 0%, #fde9d6 100%);
+  border: 3px solid var(--joy-orange);
+  border-radius: 8px;
+  padding: 20px 16px 12px 16px;
+  position: relative;
+}
+
+.spawn-agent-burst::before {
+  content: '⊹ SPAWN AGENT ⊹';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--joy-orange);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 2px;
+  padding: 2px 12px;
+  border-radius: 4px;
+}
+
+.spawn-agent-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  align-items: baseline;
+  cursor: pointer;
+  list-style: none;
+  padding-top: 8px;
+  font-family: var(--font-mono);
+}
+
+.spawn-agent-summary::-webkit-details-marker {
+  display: none;
+}
+
+.spawn-agent-type {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--joy-orange);
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.spawn-agent-title {
+  font-weight: bold;
+  font-size: 1rem;
+  color: var(--dancing-red);
+}
+
+.spawn-agent-count {
+  font-size: 0.85rem;
+  color: var(--grace-blue);
+}
+
+.spawn-agent .subagent-comic {
+  margin-top: 12px;
+  border-top: 1px solid var(--joy-orange);
+  border-left: none;
+  border-radius: 0;
+  padding: 12px 0 0 0;
+  background: transparent;
 }
 
 /* === Subagent nested comic === */
@@ -334,25 +480,25 @@ body.show-tokens .token-badge {
 
 .subagent-toggle {
   cursor: pointer;
-  color: #e9a045;
+  color: var(--joy-orange);
   font-size: 0.85rem;
   font-weight: bold;
   padding: 2px 8px;
-  border: 1px solid #c47f2a;
+  border: 1px solid var(--joy-orange);
   border-radius: 4px;
   display: inline-block;
 }
 
 .subagent-toggle:hover {
-  background: #3a2510;
-  color: #f0c070;
+  background: #fdeee0;
+  color: var(--dancing-red);
 }
 
 .subagent-comic {
   margin-top: 8px;
   padding: 10px;
-  border-left: 3px solid #c47f2a;
-  background: rgba(0, 0, 0, 0.2);
+  border-left: 3px solid var(--joy-orange);
+  background: rgba(242, 132, 68, 0.08);
   border-radius: 0 8px 8px 0;
   display: flex;
   flex-direction: column;
@@ -362,6 +508,27 @@ body.show-tokens .token-badge {
 .subagent-comic .panel {
   font-size: 0.9em;
 }
+
+/* Inside a subagent, let the right-side robot bubble reach all the way to
+   the right edge — same as the action panels — by dropping the outer 30%
+   margin. Cap max-width at 85% so the LEFT edge stays around the 15% mark,
+   leaving the left column for the other robot picture. */
+.subagent-comic .claude-speech {
+  margin-right: 0;
+  max-width: 85%;
+}
+
+/* Inside a subagent, the "user" is really the parent Claude
+   giving instructions — so render the robot image there too. */
+.subagent-comic .human-avatar {
+  content: url("robot.png");
+}
+
+/* Shrink avatars inside the nested subagent comic. */
+.subagent-comic .character-avatar {
+  height: 60px;
+}
+
 
 .subagent-comic .montage-burst {
   border-width: 2px;
@@ -378,30 +545,30 @@ body.show-tokens .token-badge {
 
 .tool-output-toggle {
   cursor: pointer;
-  color: #7ec8e3;
+  color: var(--grace-blue);
   font-size: 0.85rem;
   font-weight: bold;
   padding: 2px 8px;
-  border: 1px solid #3282b8;
+  border: 1px solid var(--grace-blue);
   border-radius: 4px;
   display: inline-block;
   margin-top: 4px;
 }
 
 .tool-output-toggle:hover {
-  background: #0f3460;
-  color: #b8e0f0;
+  background: #eaf1f7;
+  color: var(--deep-navy);
 }
 
 .tool-output {
-  background: #0d0d1a;
-  border: 1px solid #3282b8;
+  background: #f6f8fa;
+  border: 1px solid var(--grace-blue);
   border-radius: 4px;
   padding: 12px;
   margin-top: 6px;
   font-size: 0.85rem;
   line-height: 1.5;
-  color: #c8c8e0;
+  color: var(--deep-navy);
   overflow-x: auto;
   max-height: 400px;
   overflow-y: auto;
@@ -417,13 +584,13 @@ body.show-tokens .token-badge {
 }
 
 .notification-box {
-  background: #1a2e1a;
+  background: #eaf5ea;
   border: 1px solid #4a8a4a;
   border-radius: 8px;
   padding: 8px 14px;
-  color: #8ac88a;
+  color: #2e5e2e;
   font-size: 0.8rem;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   position: relative;
 }
 
@@ -446,11 +613,11 @@ body.show-tokens .token-badge {
 }
 
 .narrator-box {
-  background: #2d132c;
+  background: #f7ecf2;
   border: 1px solid #843b62;
   border-radius: 4px;
   padding: 10px 16px;
-  color: #d4a0c0;
+  color: #5a2845;
   font-style: italic;
   font-size: 0.85rem;
   text-align: center;
@@ -468,27 +635,29 @@ body.show-tokens .token-badge {
 .comic-end {
   text-align: center;
   padding: 30px;
+  font-family: var(--font-title);
   font-size: 1.4rem;
-  color: #534b8a;
+  color: #7a6fa8;
   font-style: italic;
+  letter-spacing: 2px;
 }
 
 .conversation-totals {
   margin-top: 4px;
   padding: 16px 24px;
-  background: #16213e;
-  border: 2px solid #3282b8;
+  background: #fff;
+  border: 2px solid var(--grace-blue);
   border-radius: 12px;
   text-align: center;
-  font-family: 'Courier New', monospace;
-  color: #7ec8e3;
+  font-family: var(--font-mono);
+  color: var(--deep-navy);
 }
 
 .conversation-totals .totals-label {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 2px;
-  color: #534b8a;
+  color: var(--grace-blue);
   margin-bottom: 6px;
 }
 
@@ -502,12 +671,13 @@ body.show-tokens .token-badge {
 }
 
 .conversation-totals .totals-bucket strong {
-  color: #e94560;
+  color: var(--dancing-red);
   font-size: 1.15rem;
 }
 
 .conversation-totals .totals-sep {
-  color: #534b8a;
+  color: var(--grace-blue);
+  opacity: 0.5;
 }
 
 /* Queued panels — typed while Claude was busy, or injected mid-turn

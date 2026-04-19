@@ -14,6 +14,7 @@ export type PanelType =
   | "claude-speech"
   | "claude-think"
   | "action-montage"
+  | "spawn-agent"
   | "narrator"
   | "notification";
 
@@ -478,15 +479,35 @@ export function groupIntoPanels(
           }
         }
 
-        pendingTools.push({
-          name: toolName,
-          summary,
-          output,
-          subpanels: agentSubpanels,
-          agentType,
-          lineNumber: record.lineNumber,
-          ...extractTokenUsage(record),
-        });
+        // Agent spawns get their own panel (not folded into an action-montage),
+        // so they can render wider and with their own "Spawn Agent" header.
+        if (agentSubpanels) {
+          flushMontage();
+          panels.push({
+            type: "spawn-agent",
+            lines: [agentType || "Agent"],
+            toolDetails: [{
+              name: toolName,
+              summary,
+              output,
+              subpanels: agentSubpanels,
+              agentType,
+              ...extractTokenUsage(record),
+            }],
+            lineNumbers: [record.lineNumber],
+            ...extractTokenUsage(record),
+          });
+        } else {
+          pendingTools.push({
+            name: toolName,
+            summary,
+            output,
+            subpanels: agentSubpanels,
+            agentType,
+            lineNumber: record.lineNumber,
+            ...extractTokenUsage(record),
+          });
+        }
       }
       continue;
     }

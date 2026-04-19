@@ -118,6 +118,12 @@ function panelsToHtml(panelsPath: string, outputDir: string) {
   const cssDest = path.join(outputDir, "comic.css");
   fs.copyFileSync(cssSource, cssDest);
   console.log(`Wrote: ${cssDest}`);
+
+  const staticDir = path.join(__dirname, "..", "static");
+  for (const asset of fs.readdirSync(staticDir)) {
+    if (asset === "comic.css") continue;
+    fs.copyFileSync(path.join(staticDir, asset), path.join(outputDir, asset));
+  }
 }
 
 const command = process.argv[2];
