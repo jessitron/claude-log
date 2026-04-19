@@ -473,6 +473,43 @@ body.show-tokens .token-badge {
   font-style: italic;
 }
 
+.conversation-totals {
+  margin-top: 4px;
+  padding: 16px 24px;
+  background: #16213e;
+  border: 2px solid #3282b8;
+  border-radius: 12px;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  color: #7ec8e3;
+}
+
+.conversation-totals .totals-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #534b8a;
+  margin-bottom: 6px;
+}
+
+.conversation-totals .totals-numbers {
+  font-size: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: baseline;
+}
+
+.conversation-totals .totals-bucket strong {
+  color: #e94560;
+  font-size: 1.15rem;
+}
+
+.conversation-totals .totals-sep {
+  color: #534b8a;
+}
+
 /* Queued panels — typed while Claude was busy, or injected mid-turn
    (task-notifications from finished background commands). Hidden by default;
    revealed with the 'q' toggle. When revealed, the distinctive dashed border

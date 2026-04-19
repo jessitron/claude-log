@@ -1,6 +1,6 @@
 // Generate an HTML webtoon page from comic panels.
 
-import type { Panel, ToolDetail } from "./panels.js";
+import type { Panel, ToolDetail, ConversationTotals } from "./panels.js";
 
 function escapeHtml(text: string): string {
   return text
@@ -148,8 +148,31 @@ function renderPanel(panel: Panel, index: number): string {
   }
 }
 
-export function generateHtml(panels: Panel[], title: string): string {
+function renderTotals(totals: ConversationTotals | undefined): string {
+  if (!totals) return "";
+  const inT = totals.inputTokens.toLocaleString();
+  const outT = totals.outputTokens.toLocaleString();
+  const msgs = totals.messageCount.toLocaleString();
+  return `
+    <div class="conversation-totals" title="Sum of input + cache_creation + cache_read tokens across all assistant messages (including subagents), deduped by message id.">
+      <div class="totals-label">Conversation totals</div>
+      <div class="totals-numbers">
+        <span class="totals-bucket"><strong>${inT}</strong> input tokens</span>
+        <span class="totals-sep">·</span>
+        <span class="totals-bucket"><strong>${outT}</strong> output tokens</span>
+        <span class="totals-sep">·</span>
+        <span class="totals-bucket">${msgs} message${totals.messageCount === 1 ? "" : "s"}</span>
+      </div>
+    </div>`;
+}
+
+export function generateHtml(
+  panels: Panel[],
+  title: string,
+  totals?: ConversationTotals
+): string {
   const panelHtml = panels.map((p, i) => renderPanel(p, i)).join("\n");
+  const totalsHtml = renderTotals(totals);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -172,7 +195,7 @@ export function generateHtml(panels: Panel[], title: string): string {
       </div>
     </div>
 ${panelHtml}
-    <div class="comic-end">fin.</div>
+    <div class="comic-end">fin.</div>${totalsHtml}
   </div>
   <script>
     function makeToggle(buttonId, selector, showText, hideText) {

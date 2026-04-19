@@ -40,6 +40,43 @@ export interface Panel {
                          // hidden by default, revealed via the 'q' toggle
 }
 
+export interface ConversationTotals {
+  inputTokens: number;
+  outputTokens: number;
+  messageCount: number; // how many unique assistant messages contributed
+}
+
+// Sum token usage across an entire conversation, deduped by message.id.
+// One assistant message often spans multiple JSONL records (one per content block),
+// but all carry the same usage block — we want to count each API call once.
+export function computeTokenTotals(records: ConversationRecord[]): ConversationTotals {
+  const seen = new Map<string, { input: number; output: number }>();
+  for (const record of records) {
+    if (record.type !== "assistant") continue;
+    const msg = record.raw.message as
+      | { id?: string; usage?: Record<string, unknown> }
+      | undefined;
+    const id = msg?.id;
+    const usage = msg?.usage;
+    if (!id || !usage) continue;
+    if (seen.has(id)) continue;
+    const num = (v: unknown) => (typeof v === "number" ? v : 0);
+    const input =
+      num(usage.input_tokens) +
+      num(usage.cache_creation_input_tokens) +
+      num(usage.cache_read_input_tokens);
+    const output = num(usage.output_tokens);
+    seen.set(id, { input, output });
+  }
+  let inputTokens = 0;
+  let outputTokens = 0;
+  for (const { input, output } of seen.values()) {
+    inputTokens += input;
+    outputTokens += output;
+  }
+  return { inputTokens, outputTokens, messageCount: seen.size };
+}
+
 // Per-call token usage. Input total = fresh input + tokens written to cache + tokens read from cache.
 function extractTokenUsage(record: ConversationRecord): {
   totalInputTokens?: number;

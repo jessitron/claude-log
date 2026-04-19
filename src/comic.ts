@@ -12,7 +12,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseConversationLog } from "./parser.js";
-import { groupIntoPanels, type Panel } from "./panels.js";
+import { groupIntoPanels, computeTokenTotals, type Panel, type ConversationTotals } from "./panels.js";
 import { generateHtml } from "./html-generator.js";
 
 function printPanelStats(panels: Panel[]) {
@@ -26,15 +26,19 @@ function printPanelStats(panels: Panel[]) {
   }
 }
 
-async function discoverSubagents(jsonlPath: string): Promise<Map<string, Panel[]>> {
+async function discoverSubagents(jsonlPath: string): Promise<{
+  panels: Map<string, Panel[]>;
+  totals: ConversationTotals;
+}> {
   const subagentPanels = new Map<string, Panel[]>();
+  const totals: ConversationTotals = { inputTokens: 0, outputTokens: 0, messageCount: 0 };
 
   // Look for a sibling directory with the same base name containing subagent files
   const baseName = path.basename(jsonlPath, ".jsonl");
   const siblingDir = path.join(path.dirname(jsonlPath), baseName);
   const subagentsDir = path.join(siblingDir, "subagents");
 
-  if (!fs.existsSync(subagentsDir)) return subagentPanels;
+  if (!fs.existsSync(subagentsDir)) return { panels: subagentPanels, totals };
 
   const files = fs.readdirSync(subagentsDir).filter((f) => f.endsWith(".jsonl"));
   for (const file of files) {
@@ -49,10 +53,14 @@ async function discoverSubagents(jsonlPath: string): Promise<Map<string, Panel[]
     // Recurse: subagents could have their own subagents (not yet, but future-proof)
     const panels = groupIntoPanels(result.records, undefined, path.basename(filePath, ".jsonl"));
     subagentPanels.set(agentId, panels);
-    console.log(`    ${panels.length} panels`);
+    const sub = computeTokenTotals(result.records);
+    totals.inputTokens += sub.inputTokens;
+    totals.outputTokens += sub.outputTokens;
+    totals.messageCount += sub.messageCount;
+    console.log(`    ${panels.length} panels, ${sub.inputTokens.toLocaleString()} in / ${sub.outputTokens.toLocaleString()} out`);
   }
 
-  return subagentPanels;
+  return { panels: subagentPanels, totals };
 }
 
 async function jsonlToPanels(jsonlPath: string, outputDir: string): Promise<string> {
@@ -60,7 +68,7 @@ async function jsonlToPanels(jsonlPath: string, outputDir: string): Promise<stri
   const result = await parseConversationLog(jsonlPath);
   console.log(`  ${result.records.length} records (${result.stats.totalLines} lines)`);
 
-  const subagentPanels = await discoverSubagents(jsonlPath);
+  const { panels: subagentPanels, totals: subagentTotals } = await discoverSubagents(jsonlPath);
   if (subagentPanels.size > 0) {
     console.log(`  Found ${subagentPanels.size} subagent(s)`);
   }
@@ -70,7 +78,17 @@ async function jsonlToPanels(jsonlPath: string, outputDir: string): Promise<stri
   printPanelStats(panels);
   const title = baseName.replace(/[-_]/g, " ");
 
-  const artifact = { title, panels };
+  const mainTotals = computeTokenTotals(result.records);
+  const totals: ConversationTotals = {
+    inputTokens: mainTotals.inputTokens + subagentTotals.inputTokens,
+    outputTokens: mainTotals.outputTokens + subagentTotals.outputTokens,
+    messageCount: mainTotals.messageCount + subagentTotals.messageCount,
+  };
+  console.log(
+    `  Totals: ${totals.inputTokens.toLocaleString()} in / ${totals.outputTokens.toLocaleString()} out across ${totals.messageCount} message(s)`
+  );
+
+  const artifact = { title, panels, totals };
 
   fs.mkdirSync(outputDir, { recursive: true });
   const panelsPath = path.join(outputDir, `${baseName}.panels.json`);
@@ -84,10 +102,11 @@ function panelsToHtml(panelsPath: string, outputDir: string) {
   const raw = JSON.parse(fs.readFileSync(panelsPath, "utf8"));
   const panels: Panel[] = raw.panels;
   const title: string = raw.title || "Untitled";
+  const totals: ConversationTotals | undefined = raw.totals;
 
   printPanelStats(panels);
 
-  const html = generateHtml(panels, title);
+  const html = generateHtml(panels, title, totals);
 
   fs.mkdirSync(outputDir, { recursive: true });
   const baseName = path.basename(panelsPath, ".panels.json");
