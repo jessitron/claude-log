@@ -26,11 +26,21 @@ export interface ToolDetail {
   agentType?: string;  // e.g. "Explore"
 }
 
+// A group of tool calls emitted by one assistant message. Parallel calls from
+// the same message.id form a single batch; sequential round-trips produce
+// separate batches. Tokens on the batch are the API call that produced it.
+export interface MontageBatch {
+  tools: ToolDetail[];
+  totalInputTokens?: number;
+  outputTokens?: number;
+}
+
 export interface Panel {
   type: PanelType;
   lines: string[];       // the text content to display
   toolNames?: string[];  // for action-montage: which tools were used
   toolDetails?: ToolDetail[]; // per-tool detail for expandable view
+  batches?: MontageBatch[]; // for action-montage: tools grouped by message.id
   lineNumbers: number[]; // source line numbers for traceability
   sourceFile?: string;   // basename of JSONL file these records came from
   totalInputTokens?: number; // for assistant-text/think panels: input + cache_creation + cache_read
@@ -268,6 +278,9 @@ export function groupIntoPanels(
 
   // We accumulate tool_use blocks into an action montage.
   // When we hit something that isn't a tool_use, we flush the montage.
+  // messageId + usage let us split the montage into batches: tools from the
+  // same assistant message are parallel; different message.ids are sequential
+  // round-trips.
   let pendingTools: {
     name: string;
     summary: string;
@@ -275,6 +288,9 @@ export function groupIntoPanels(
     subpanels?: Panel[];
     agentType?: string;
     lineNumber: number;
+    messageId?: string;
+    totalInputTokens?: number;
+    outputTokens?: number;
   }[] = [];
 
   // Notifications that arrive mid-montage get deferred until after the montage flushes
@@ -305,11 +321,32 @@ export function groupIntoPanels(
       subpanels: t.subpanels,
       agentType: t.agentType,
     }));
+
+    // Group consecutive tools by messageId. Tools with the same id were
+    // emitted in parallel (one assistant message, one usage block); each new
+    // id is a sequential round-trip.
+    const batches: MontageBatch[] = [];
+    let currentId: string | undefined;
+    for (let b = 0; b < pendingTools.length; b++) {
+      const t = pendingTools[b];
+      if (batches.length === 0 || t.messageId !== currentId) {
+        batches.push({
+          tools: [toolDetails[b]],
+          totalInputTokens: t.totalInputTokens,
+          outputTokens: t.outputTokens,
+        });
+        currentId = t.messageId;
+      } else {
+        batches[batches.length - 1].tools.push(toolDetails[b]);
+      }
+    }
+
     panels.push({
       type: "action-montage",
       lines,
       toolNames: Array.from(counts.keys()),
       toolDetails,
+      batches,
       lineNumbers: pendingTools.map((t) => t.lineNumber),
     });
     pendingTools = [];
@@ -488,6 +525,8 @@ export function groupIntoPanels(
             lineNumbers: [record.lineNumber],
           });
         } else {
+          const msg = record.raw.message as { id?: string } | undefined;
+          const { totalInputTokens, outputTokens } = extractTokenUsage(record);
           pendingTools.push({
             name: toolName,
             summary,
@@ -495,6 +534,9 @@ export function groupIntoPanels(
             subpanels: agentSubpanels,
             agentType,
             lineNumber: record.lineNumber,
+            messageId: msg?.id,
+            totalInputTokens,
+            outputTokens,
           });
         }
       }

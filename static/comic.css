@@ -474,6 +474,80 @@ body.show-tokens .token-badge {
   color: var(--grace-blue);
 }
 
+/* Batch grouping: tools emitted in one assistant message = one batch.
+   First batch keeps the border-top that separates it from the summary;
+   subsequent batches are separated by the round-trip divider. */
+.montage-batches {
+  padding-top: 8px;
+  border-top: 1px solid var(--grace-blue);
+  margin-top: 8px;
+}
+
+.montage-batches .montage-details {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.montage-batch {
+  position: relative;
+}
+
+.batch-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  font-family: var(--font-body);
+  color: var(--grace-blue);
+  margin-bottom: 2px;
+}
+
+.batch-parallel {
+  display: inline-block;
+  background: var(--grace-blue);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+}
+
+/* Token badge inside a batch header: inline, not floated into the margin. */
+.batch-header .token-badge {
+  position: static;
+  display: inline-block;
+  margin: 0;
+}
+
+/* Round-trip divider: Claude saw the previous tool's result, then called
+   again. Shown between sequential batches within one montage. */
+.montage-roundtrip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0;
+  position: relative;
+}
+
+.montage-roundtrip::before,
+.montage-roundtrip::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--dancing-red);
+  opacity: 0.3;
+}
+
+.roundtrip-arrow {
+  color: var(--dancing-red);
+  font-size: 1.1rem;
+  padding: 0 10px;
+  font-weight: bold;
+}
+
 .tool-command {
   display: block;
   color: #3b7a5a;
