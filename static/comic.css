@@ -248,25 +248,52 @@ body.show-tokens .token-badge {
 
 /* === Robot sequence ===
    Wraps contiguous claude-think / action-montage / spawn-agent /
-   claude-speech panels so a single robot graphic can slide down through
-   them as they reveal. Panels inside the sequence lose their own width
-   and alignment — the sequence owns the layout. */
+   claude-speech panels so a single robot graphic can move through them
+   as they reveal. The wrapper spans the full comic-strip width; each
+   panel inside keeps its own horizontal zone (backstage-right for
+   think/action, dialogue-center for speech). The robot is absolutely
+   positioned inside the sequence and JS sets its transform to land
+   just-left-of whichever panel is currently the last revealed. */
 .robot-sequence {
-  align-self: flex-end;
-  /* 55% for the panel column + room for the robot and its gap. */
-  width: calc(55% + 76px);
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-self: stretch;
+  width: 100%;
   position: relative;
 }
 
+.sequence-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Panels inside the sequence keep their own positioning — speech lives
+   in the dialogue column (15%-70% of container), everything else is in
+   the backstage column (45%-100%). */
+.sequence-panels > .claude-think,
+.sequence-panels > .action-montage,
+.sequence-panels > .spawn-agent {
+  align-self: flex-end;
+  width: 55%;
+  max-width: none;
+  margin-right: 0;
+}
+
+.sequence-panels > .claude-speech {
+  align-self: flex-end;
+  width: 55%;
+  max-width: none;
+  margin-right: 30%;
+}
+
 .sequence-robot {
+  position: absolute;
+  top: 0;
+  left: 0;
   height: 90px;
   width: auto;
-  flex-shrink: 0;
-  /* translateY gets set from JS to the offsetTop of the last-revealed
-     panel in the sequence, producing the "walk down" effect. */
+  /* JS sets translate(x, y) to place the robot just-left-of the last
+     revealed panel. transitions both axes so the handoff from
+     backstage to the dialogue column slides smoothly. */
   transition: transform 500ms ease;
   /* The robot only appears once at least one panel in the sequence is
      visible; otherwise a lonely robot would hover next to reserved but
@@ -276,25 +303,6 @@ body.show-tokens .token-badge {
 
 .robot-sequence:has(> .sequence-panels > .panel:not(.panel-hidden)) > .sequence-robot {
   visibility: visible;
-}
-
-.sequence-panels {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Panels inside a sequence inherit its layout instead of their own. */
-.sequence-panels > .claude-think,
-.sequence-panels > .action-montage,
-.sequence-panels > .spawn-agent,
-.sequence-panels > .claude-speech {
-  align-self: stretch;
-  width: auto;
-  max-width: none;
-  margin-right: 0;
 }
 
 /* === Claude speech === */
