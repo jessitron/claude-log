@@ -276,15 +276,19 @@ ${panelHtml}
       const panels = Array.from(document.querySelectorAll('.comic-strip > .panel'));
       if (panels.length === 0) return;
 
-      // For each Claude speech bubble: walk its text nodes, stash the
-      // originals, freeze the panel's rendered height so the bubble can
-      // grow rightward from the avatar without shifting other panels,
+      // For each speech bubble (Claude or Human): walk its text nodes,
+      // stash the originals, freeze the panel's rendered height so the
+      // bubble can grow from one edge without shifting other panels,
       // then blank the text out. Hiding the panel resets the entry so
-      // re-revealing retypes from scratch.
+      // re-revealing retypes from scratch. Claude types fast; the human
+      // types slower.
       const entryByPanel = new WeakMap();
       panels.forEach(function(panel) {
-        if (!panel.classList.contains('claude-speech')) return;
-        const bubble = panel.querySelector('.claude-bubble');
+        let charsPerSec = 0;
+        if (panel.classList.contains('claude-speech')) charsPerSec = 180;
+        else if (panel.classList.contains('human-speech')) charsPerSec = 60;
+        else return;
+        const bubble = panel.querySelector('.speech-bubble');
         if (!bubble) return;
         const nodes = [];
         const walker = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT);
@@ -293,17 +297,16 @@ ${panelHtml}
         const originals = nodes.map(function(n) { return n.nodeValue; });
         panel.style.minHeight = panel.offsetHeight + 'px';
         nodes.forEach(function(n) { n.nodeValue = ''; });
-        entryByPanel.set(panel, { nodes: nodes, originals: originals, typed: false, aborted: false });
+        entryByPanel.set(panel, { nodes: nodes, originals: originals, typed: false, aborted: false, charsPerSec: charsPerSec });
       });
 
-      const CHARS_PER_SEC = 180;
       function typeEntry(entry) {
         if (entry.typed) return;
         const total = entry.originals.reduce(function(a, s) { return a + s.length; }, 0);
         if (total === 0) { entry.typed = true; return; }
         entry.aborted = false;
         const startMs = performance.now();
-        const durationMs = (total / CHARS_PER_SEC) * 1000;
+        const durationMs = (total / entry.charsPerSec) * 1000;
         function tick(now) {
           if (entry.aborted) return;
           const elapsed = now - startMs;

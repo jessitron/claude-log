@@ -188,6 +188,13 @@ body.show-tokens .token-badge {
   max-width: 55%;
 }
 
+/* Content-sized like the Claude bubble, anchored to the left edge of
+   its panel so it grows rightward as the text types in. */
+.human-speech .speech-bubble {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .character-avatar {
   width: auto;
   display: block;
