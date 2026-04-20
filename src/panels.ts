@@ -107,6 +107,32 @@ function extractTokenUsage(record: ConversationRecord): {
   };
 }
 
+// Which content types each assistant message actually contained. A message
+// is "hidden-thinking-only" when its sole block is an empty `thinking` (the
+// signature-only round-trip case) — no visible thinking, no text, no
+// tool_use. Those turns fold into the surrounding montage as phantom ↻s
+// instead of producing their own "…" panel.
+function buildMessageContentIndex(
+  records: ConversationRecord[]
+): Map<string, { hasVisibleThinking: boolean; hasText: boolean; hasToolUse: boolean }> {
+  const index = new Map<string, { hasVisibleThinking: boolean; hasText: boolean; hasToolUse: boolean }>();
+  for (const r of records) {
+    if (r.type !== "assistant") continue;
+    const msg = r.raw.message as { id?: string; content?: ContentBlock[] } | undefined;
+    const id = msg?.id;
+    if (!id) continue;
+    const entry = index.get(id) ?? { hasVisibleThinking: false, hasText: false, hasToolUse: false };
+    const blocks = Array.isArray(msg?.content) ? msg!.content : [];
+    for (const b of blocks) {
+      if (b.type === "thinking" && ((b as any).thinking || "").trim()) entry.hasVisibleThinking = true;
+      if (b.type === "text" && ((b as any).text || "").trim()) entry.hasText = true;
+      if (b.type === "tool_use") entry.hasToolUse = true;
+    }
+    index.set(id, entry);
+  }
+  return index;
+}
+
 // One assistant message = one API call = one set of billed tokens. A message
 // usually spans several JSONL records (one per content block), and streaming
 // snapshots of output_tokens GROW toward the final total — so the last record
@@ -307,6 +333,7 @@ export function groupIntoPanels(
   const toolResults = buildToolResultIndex(records);
   const agentIndex = buildAgentIndex(records);
   const messageUsage = buildMessageUsageIndex(records);
+  const messageContent = buildMessageContentIndex(records);
 
   // Filter to just the records we care about, so index-based look-ahead is clean.
   const visible = records.filter((r) => !isSkippable(r));
@@ -329,6 +356,10 @@ export function groupIntoPanels(
   // messageId lets us split the montage into batches: tools from the same
   // assistant message are parallel; different message.ids are sequential
   // round-trips.
+  //
+  // Phantom entries represent a hidden-thinking-only turn between tool
+  // batches — a round-trip the user shouldn't see as a separate panel, but
+  // whose tokens should ride on a ↻ marker inside the montage.
   let pendingTools: {
     name: string;
     summary: string;
@@ -337,6 +368,7 @@ export function groupIntoPanels(
     agentType?: string;
     lineNumber: number;
     messageId?: string;
+    isPhantom?: boolean;
   }[] = [];
 
   // Notifications that arrive mid-montage get deferred until after the montage flushes
@@ -351,16 +383,15 @@ export function groupIntoPanels(
       }
       return;
     }
-    const toolNames = pendingTools.map((t) => t.name);
-    // Deduplicate and count for display
+    // Phantoms don't count as real tools for the montage summary, but they
+    // do need their own batch so their tokens show as a ↻ marker.
+    const realTools = pendingTools.filter((t) => !t.isPhantom);
     const counts = new Map<string, number>();
-    for (const name of toolNames) {
-      counts.set(name, (counts.get(name) || 0) + 1);
-    }
+    for (const t of realTools) counts.set(t.name, (counts.get(t.name) || 0) + 1);
     const lines = Array.from(counts.entries()).map(([name, count]) =>
       count > 1 ? `${name} ×${count}` : name
     );
-    const toolDetails = pendingTools.map((t) => ({
+    const toolDetails = realTools.map((t) => ({
       name: t.name,
       summary: t.summary,
       output: t.output,
@@ -370,27 +401,39 @@ export function groupIntoPanels(
 
     // Group consecutive tools by messageId. Tools with the same id were
     // emitted in parallel (one assistant message, one usage block); each new
-    // id is a sequential round-trip.
+    // id is a sequential round-trip. Phantoms always form their own batch.
     //
     // Tokens on a batch belong there ONLY if the batch's message produced no
     // thought/speech panel elsewhere. Otherwise that panel already shows the
     // tokens and the batch should stay tokenless so we don't double-count.
     const batches: MontageBatch[] = [];
     let currentId: string | undefined;
+    let realIdx = 0;
     for (let b = 0; b < pendingTools.length; b++) {
       const t = pendingTools[b];
-      if (batches.length === 0 || t.messageId !== currentId) {
+      if (t.isPhantom) {
+        const usage = t.messageId ? messageUsage.get(t.messageId) : undefined;
+        batches.push({
+          tools: [],
+          totalInputTokens: usage?.totalInputTokens,
+          outputTokens: usage?.outputTokens,
+        });
+        currentId = t.messageId;
+        continue;
+      }
+      if (batches.length === 0 || batches[batches.length - 1].tools.length === 0 || t.messageId !== currentId) {
         const ownsTokens = !!t.messageId && !messagesWithThoughtPanel.has(t.messageId);
         const usage = t.messageId ? messageUsage.get(t.messageId) : undefined;
         batches.push({
-          tools: [toolDetails[b]],
+          tools: [toolDetails[realIdx]],
           totalInputTokens: ownsTokens ? usage?.totalInputTokens : undefined,
           outputTokens: ownsTokens ? usage?.outputTokens : undefined,
         });
         currentId = t.messageId;
       } else {
-        batches[batches.length - 1].tools.push(toolDetails[b]);
+        batches[batches.length - 1].tools.push(toolDetails[realIdx]);
       }
+      realIdx++;
     }
 
     panels.push({
@@ -546,15 +589,55 @@ export function groupIntoPanels(
       } else if (block.type === "thinking") {
         // Omitted thinking (default on Opus 4.7): the `thinking` field is
         // empty but a `signature` is present. The model really thought;
-        // the content is just encrypted for round-trip. Render as "…" so
-        // the reader sees the beat of cognition happened.
+        // the content is just encrypted for round-trip.
         const thinking = (block as any).thinking || "";
-        const visibleLine = thinking.trim() ? truncate(thinking, 300) : "…";
+        const isHidden = !thinking.trim();
+        const visibleLine = isHidden ? "…" : truncate(thinking, 300);
 
         if (pendingThoughtPanel) {
           pendingThoughtPanel.panel.lines.push(visibleLine);
           pendingThoughtPanel.panel.lineNumbers.push(record.lineNumber);
           continue;
+        }
+
+        if (isHidden && msgId) {
+          const content = messageContent.get(msgId);
+          // Hidden thinking in a turn that also has tool_uses: the batch
+          // already represents this turn and carries its tokens. Skip the
+          // "…" bubble entirely and don't flush — let the tool_use extend
+          // the current montage.
+          if (content && !content.hasText && !content.hasVisibleThinking && content.hasToolUse) {
+            continue;
+          }
+          // Thinking-only turn (no text, no tools) between tool batches:
+          // fold as a phantom ↻ inside the montage.
+          const isThinkingOnlyTurn = content
+            && !content.hasVisibleThinking
+            && !content.hasText
+            && !content.hasToolUse;
+          if (isThinkingOnlyTurn && pendingTools.length > 0) {
+            let nextIsToolUse = false;
+            for (let j = i + 1; j < visible.length; j++) {
+              const next = visible[j];
+              if (next.type === "assistant") {
+                const nextMsg = next.raw.message as { id?: string } | undefined;
+                if (nextMsg?.id === msgId) continue;
+                nextIsToolUse = assistantBlockType(next) === "tool_use";
+                break;
+              }
+              break;
+            }
+            if (nextIsToolUse) {
+              pendingTools.push({
+                name: "__phantom_thinking__",
+                summary: "",
+                lineNumber: record.lineNumber,
+                messageId: msgId,
+                isPhantom: true,
+              });
+              continue;
+            }
+          }
         }
 
         flushMontage();

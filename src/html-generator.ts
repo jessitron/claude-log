@@ -128,10 +128,21 @@ function renderPanel(panel: Panel, index: number): string {
       // owning thought bubble. The tokens ride on the ↻ round-trip marker:
       // always between sequential batches, and at the top of the montage
       // if the first batch owns its tokens.
+      //
+      // A batch with zero tools is a "phantom" — a hidden-thinking-only
+      // round-trip that happened between real tool calls. It renders as
+      // nothing but the ↻ + tokens, inline in the montage.
       const batchHtml = batches
         .map((batch, bi) => {
           const tools = batch.tools.filter((d) => d.summary);
-          if (tools.length === 0) return "";
+          const isPhantom = tools.length === 0;
+          const badge = tokenBadge(batch.totalInputTokens, batch.outputTokens);
+
+          if (isPhantom) {
+            const tripTitle = "Hidden-thinking round-trip";
+            return `<div class="montage-roundtrip phantom" title="${escapeHtml(tripTitle)}"><span class="roundtrip-arrow">↻</span>${badge}</div>`;
+          }
+
           const items = tools.map(renderToolItem).join("\n            ");
           const parallelTag = tools.length > 1
             ? `<span class="batch-parallel">parallel ×${tools.length}</span>`
@@ -139,7 +150,6 @@ function renderPanel(panel: Panel, index: number): string {
           const header = parallelTag
             ? `<div class="batch-header">${parallelTag}</div>`
             : "";
-          const badge = tokenBadge(batch.totalInputTokens, batch.outputTokens);
           const tripTitle = bi > 0
             ? "New round-trip: Claude saw the previous tool results, then called again"
             : "New round-trip: Claude's turn for this batch";
