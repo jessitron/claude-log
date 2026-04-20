@@ -266,17 +266,77 @@ ${panelHtml}
     hotkeyToggle('toggle-tokens', 'show-tokens', 't', 'Show tokens', 'Hide tokens');
     hotkeyToggle('toggle-queued', 'show-queued', 'q', 'Show queued', 'Hide queued');
 
-    // Panel reveal: the layout is fully laid out, but only the first
-    // top-level panel is visible on load. Right arrow reveals the next
-    // hidden panel and smooth-scrolls it into view if needed. Left arrow
-    // re-hides the most recently revealed panel. "Reveal all" shows
-    // everything at once.
+    // Panel reveal + Claude-speech typewriter. The layout is fully laid
+    // out, but only the first top-level panel is visible on load. Right
+    // arrow reveals the next hidden panel (typing its text if it's a
+    // Claude speech bubble) and smooth-scrolls it into view if needed.
+    // Left arrow re-hides the most recently revealed panel. "Reveal all"
+    // shows everything at once with no typing animation.
     (function panelReveal() {
       const panels = Array.from(document.querySelectorAll('.comic-strip > .panel'));
       if (panels.length === 0) return;
+
+      // For each Claude speech bubble: walk its text nodes, stash the
+      // originals, freeze the bubble's rendered height so typing won't
+      // reflow the page, then blank the text out. Typed once on reveal,
+      // then stays typed forever — re-hiding + re-revealing is instant.
+      const entryByPanel = new WeakMap();
+      panels.forEach(function(panel) {
+        if (!panel.classList.contains('claude-speech')) return;
+        const bubble = panel.querySelector('.claude-bubble');
+        if (!bubble) return;
+        const nodes = [];
+        const walker = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT);
+        let n;
+        while ((n = walker.nextNode())) nodes.push(n);
+        const originals = nodes.map(function(n) { return n.nodeValue; });
+        bubble.style.minHeight = bubble.offsetHeight + 'px';
+        nodes.forEach(function(n) { n.nodeValue = ''; });
+        entryByPanel.set(panel, { nodes: nodes, originals: originals, typed: false, aborted: false });
+      });
+
+      const CHARS_PER_SEC = 180;
+      function typeEntry(entry) {
+        if (entry.typed) return;
+        const total = entry.originals.reduce(function(a, s) { return a + s.length; }, 0);
+        if (total === 0) { entry.typed = true; return; }
+        entry.aborted = false;
+        const startMs = performance.now();
+        const durationMs = (total / CHARS_PER_SEC) * 1000;
+        function tick(now) {
+          if (entry.aborted) return;
+          const elapsed = now - startMs;
+          const targetChars = Math.min(total, Math.ceil((elapsed / durationMs) * total));
+          let remaining = targetChars;
+          for (let i = 0; i < entry.nodes.length; i++) {
+            const orig = entry.originals[i];
+            if (remaining >= orig.length) {
+              entry.nodes[i].nodeValue = orig;
+              remaining -= orig.length;
+            } else {
+              entry.nodes[i].nodeValue = orig.slice(0, remaining);
+              for (let j = i + 1; j < entry.nodes.length; j++) entry.nodes[j].nodeValue = '';
+              break;
+            }
+          }
+          if (targetChars < total) requestAnimationFrame(tick);
+          else entry.typed = true;
+        }
+        requestAnimationFrame(tick);
+      }
+      function showEntryFully(entry) {
+        entry.aborted = true;
+        entry.nodes.forEach(function(n, i) { n.nodeValue = entry.originals[i]; });
+        entry.typed = true;
+      }
+
       panels.forEach(function(el, i) {
         if (i > 0) el.classList.add('panel-hidden');
       });
+
+      // If the first panel happens to be a Claude speech, start typing it.
+      const firstEntry = entryByPanel.get(panels[0]);
+      if (firstEntry) typeEntry(firstEntry);
 
       function nextHiddenIndex() {
         for (let i = 0; i < panels.length; i++) {
@@ -297,6 +357,8 @@ ${panelHtml}
         const el = panels[i];
         el.classList.remove('panel-hidden');
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const entry = entryByPanel.get(el);
+        if (entry) typeEntry(entry);
       }
       function hideLast() {
         const i = lastVisibleIndex();
@@ -304,7 +366,11 @@ ${panelHtml}
         panels[i].classList.add('panel-hidden');
       }
       function revealAll() {
-        panels.forEach(function(el) { el.classList.remove('panel-hidden'); });
+        panels.forEach(function(el) {
+          const entry = entryByPanel.get(el);
+          if (entry) showEntryFully(entry);
+          el.classList.remove('panel-hidden');
+        });
       }
 
       document.getElementById('reveal-all').addEventListener('click', revealAll);
