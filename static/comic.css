@@ -239,7 +239,10 @@ body.show-tokens .token-badge {
 /* === Claude speech === */
 .claude-speech {
   align-self: flex-end;
-  max-width: 55%;
+  /* Fixed width (not max-width) so the panel keeps a stable left edge
+     even when the bubble inside is empty or narrow. The bubble can then
+     grow rightward from the avatar without the panel sliding around. */
+  width: 55%;
   margin-right: 30%;
   display: flex;
   align-items: flex-start;
@@ -253,8 +256,10 @@ body.show-tokens .token-badge {
 }
 
 .claude-speech .speech-bubble {
-  flex: 1;
+  /* Content-sized so the bubble's right edge extends as text is typed
+     in. min-width: 0 lets it shrink to wrap text rather than overflow. */
   min-width: 0;
+  max-width: 100%;
 }
 
 .claude-bubble {

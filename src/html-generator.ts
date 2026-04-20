@@ -277,9 +277,10 @@ ${panelHtml}
       if (panels.length === 0) return;
 
       // For each Claude speech bubble: walk its text nodes, stash the
-      // originals, freeze the bubble's rendered height so typing won't
-      // reflow the page, then blank the text out. Typed once on reveal,
-      // then stays typed forever — re-hiding + re-revealing is instant.
+      // originals, freeze the panel's rendered height so the bubble can
+      // grow rightward from the avatar without shifting other panels,
+      // then blank the text out. Hiding the panel resets the entry so
+      // re-revealing retypes from scratch.
       const entryByPanel = new WeakMap();
       panels.forEach(function(panel) {
         if (!panel.classList.contains('claude-speech')) return;
@@ -290,7 +291,7 @@ ${panelHtml}
         let n;
         while ((n = walker.nextNode())) nodes.push(n);
         const originals = nodes.map(function(n) { return n.nodeValue; });
-        bubble.style.minHeight = bubble.offsetHeight + 'px';
+        panel.style.minHeight = panel.offsetHeight + 'px';
         nodes.forEach(function(n) { n.nodeValue = ''; });
         entryByPanel.set(panel, { nodes: nodes, originals: originals, typed: false, aborted: false });
       });
@@ -363,7 +364,14 @@ ${panelHtml}
       function hideLast() {
         const i = lastVisibleIndex();
         if (i < 0) return;
-        panels[i].classList.add('panel-hidden');
+        const el = panels[i];
+        el.classList.add('panel-hidden');
+        const entry = entryByPanel.get(el);
+        if (entry) {
+          entry.aborted = true;
+          entry.nodes.forEach(function(n) { n.nodeValue = ''; });
+          entry.typed = false;
+        }
       }
       function revealAll() {
         panels.forEach(function(el) {
