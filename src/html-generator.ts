@@ -122,22 +122,31 @@ function renderPanel(panel: Panel, index: number): string {
         ? panel.batches
         : [{ tools: panel.toolDetails || [], totalInputTokens: undefined, outputTokens: undefined }];
 
+      // Each batch = one API call's tool_uses. Tokens belong on the batch
+      // ONLY when the call produced no thought/speech panel (i.e. tool-only
+      // turn); otherwise the tokens already live above the montage on the
+      // owning thought bubble. The tokens ride on the ↻ round-trip marker:
+      // always between sequential batches, and at the top of the montage
+      // if the first batch owns its tokens.
       const batchHtml = batches
         .map((batch, bi) => {
           const tools = batch.tools.filter((d) => d.summary);
           if (tools.length === 0) return "";
           const items = tools.map(renderToolItem).join("\n            ");
-          const badge = tokenBadge(batch.totalInputTokens, batch.outputTokens);
           const parallelTag = tools.length > 1
             ? `<span class="batch-parallel">parallel ×${tools.length}</span>`
             : "";
-          const header = (badge || parallelTag)
-            ? `<div class="batch-header">${parallelTag}${badge}</div>`
+          const header = parallelTag
+            ? `<div class="batch-header">${parallelTag}</div>`
             : "";
-          const divider = bi > 0
-            ? `<div class="montage-roundtrip" title="New round-trip: Claude saw the previous tool results, then called again"><span class="roundtrip-arrow">↻</span></div>`
+          const badge = tokenBadge(batch.totalInputTokens, batch.outputTokens);
+          const tripTitle = bi > 0
+            ? "New round-trip: Claude saw the previous tool results, then called again"
+            : "New round-trip: Claude's turn for this batch";
+          const trip = bi > 0 || badge
+            ? `<div class="montage-roundtrip" title="${escapeHtml(tripTitle)}"><span class="roundtrip-arrow">↻</span>${badge}</div>`
             : "";
-          return `${divider}<div class="montage-batch">${header}<ul class="montage-details">
+          return `${trip}<div class="montage-batch">${header}<ul class="montage-details">
             ${items}
           </ul></div>`;
         })

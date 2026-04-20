@@ -107,6 +107,40 @@ function extractTokenUsage(record: ConversationRecord): {
   };
 }
 
+// One assistant message = one API call = one set of billed tokens. A message
+// usually spans several JSONL records (one per content block), and streaming
+// snapshots of output_tokens GROW toward the final total — so the last record
+// of each message carries the truth. This index captures that per-message,
+// letting panels show correct token counts instead of mid-stream snapshots.
+function buildMessageUsageIndex(
+  records: ConversationRecord[]
+): Map<string, { totalInputTokens?: number; outputTokens?: number }> {
+  const index = new Map<string, { totalInputTokens?: number; outputTokens?: number }>();
+  for (const r of records) {
+    if (r.type !== "assistant") continue;
+    const msg = r.raw.message as { id?: string } | undefined;
+    const id = msg?.id;
+    if (!id) continue;
+    const usage = extractTokenUsage(r);
+    const existing = index.get(id);
+    if (!existing) {
+      index.set(id, usage);
+    } else {
+      index.set(id, {
+        totalInputTokens: Math.max(
+          existing.totalInputTokens ?? 0,
+          usage.totalInputTokens ?? 0
+        ) || undefined,
+        outputTokens: Math.max(
+          existing.outputTokens ?? 0,
+          usage.outputTokens ?? 0
+        ) || undefined,
+      });
+    }
+  }
+  return index;
+}
+
 // Records we skip entirely — they're noise for a comic
 function isSkippable(record: ConversationRecord): boolean {
   if (record.type === "progress") return true;
@@ -272,14 +306,28 @@ export function groupIntoPanels(
   const panels: Panel[] = [];
   const toolResults = buildToolResultIndex(records);
   const agentIndex = buildAgentIndex(records);
+  const messageUsage = buildMessageUsageIndex(records);
 
   // Filter to just the records we care about, so index-based look-ahead is clean.
   const visible = records.filter((r) => !isSkippable(r));
 
+  // Track which messages already have a thinking/text panel so the matching
+  // tool batch doesn't double-show tokens. Each API call's tokens should
+  // appear exactly once in the comic — on the thought/speech bubble when
+  // the call produced one, else on the round-trip divider that starts the
+  // call's tool batch.
+  const messagesWithThoughtPanel = new Set<string>();
+
+  // The last thinking/text panel we emitted, tracked so that consecutive
+  // same-message blocks (thinking → text, or thinking → thinking) merge
+  // into one panel instead of producing separate thought bubbles for the
+  // same API call.
+  let pendingThoughtPanel: { panel: Panel; messageId: string } | null = null;
+
   // We accumulate tool_use blocks into an action montage.
   // When we hit something that isn't a tool_use, we flush the montage.
-  // messageId + usage let us split the montage into batches: tools from the
-  // same assistant message are parallel; different message.ids are sequential
+  // messageId lets us split the montage into batches: tools from the same
+  // assistant message are parallel; different message.ids are sequential
   // round-trips.
   let pendingTools: {
     name: string;
@@ -289,8 +337,6 @@ export function groupIntoPanels(
     agentType?: string;
     lineNumber: number;
     messageId?: string;
-    totalInputTokens?: number;
-    outputTokens?: number;
   }[] = [];
 
   // Notifications that arrive mid-montage get deferred until after the montage flushes
@@ -325,15 +371,21 @@ export function groupIntoPanels(
     // Group consecutive tools by messageId. Tools with the same id were
     // emitted in parallel (one assistant message, one usage block); each new
     // id is a sequential round-trip.
+    //
+    // Tokens on a batch belong there ONLY if the batch's message produced no
+    // thought/speech panel elsewhere. Otherwise that panel already shows the
+    // tokens and the batch should stay tokenless so we don't double-count.
     const batches: MontageBatch[] = [];
     let currentId: string | undefined;
     for (let b = 0; b < pendingTools.length; b++) {
       const t = pendingTools[b];
       if (batches.length === 0 || t.messageId !== currentId) {
+        const ownsTokens = !!t.messageId && !messagesWithThoughtPanel.has(t.messageId);
+        const usage = t.messageId ? messageUsage.get(t.messageId) : undefined;
         batches.push({
           tools: [toolDetails[b]],
-          totalInputTokens: t.totalInputTokens,
-          outputTokens: t.outputTokens,
+          totalInputTokens: ownsTokens ? usage?.totalInputTokens : undefined,
+          outputTokens: ownsTokens ? usage?.outputTokens : undefined,
         });
         currentId = t.messageId;
       } else {
@@ -450,9 +502,24 @@ export function groupIntoPanels(
       const block = blocks[0]; // one block per record in practice
       if (!block) continue;
 
+      const msg = record.raw.message as { id?: string } | undefined;
+      const msgId = msg?.id;
+
+      // Consecutive same-message thinking/text blocks merge into one panel:
+      // they're one API call, one billed turn, so one bubble.
+      if (pendingThoughtPanel && pendingThoughtPanel.messageId !== msgId) {
+        pendingThoughtPanel = null;
+      }
+
       if (block.type === "text") {
         const text = (block as any).text || "";
         if (!text.trim()) continue;
+
+        if (pendingThoughtPanel) {
+          pendingThoughtPanel.panel.lines.push(text.trim());
+          pendingThoughtPanel.panel.lineNumbers.push(record.lineNumber);
+          continue;
+        }
 
         // Heuristic: short text followed by a tool_use record is inner monologue,
         // not real dialogue. "Let me read the file." → thought bubble.
@@ -462,37 +529,47 @@ export function groupIntoPanels(
           assistantBlockType(nextRecord) === "tool_use";
         const isShort = text.trim().length < 150;
 
-        if (isShort && followedByTool) {
-          flushMontage();
-          panels.push({
-            type: "claude-think",
-            lines: [text.trim()],
-            lineNumbers: [record.lineNumber],
-            ...extractTokenUsage(record),
-          });
-        } else {
-          flushMontage();
-          panels.push({
-            type: "claude-speech",
-            lines: [text],
-            lineNumbers: [record.lineNumber],
-            ...extractTokenUsage(record),
-          });
+        flushMontage();
+        const type = isShort && followedByTool ? "claude-think" : "claude-speech";
+        const usage = msgId ? messageUsage.get(msgId) ?? {} : {};
+        const panel: Panel = {
+          type,
+          lines: [type === "claude-think" ? text.trim() : text],
+          lineNumbers: [record.lineNumber],
+          ...usage,
+        };
+        panels.push(panel);
+        if (msgId) {
+          pendingThoughtPanel = { panel, messageId: msgId };
+          messagesWithThoughtPanel.add(msgId);
         }
       } else if (block.type === "thinking") {
         // Omitted thinking (default on Opus 4.7): the `thinking` field is
         // empty but a `signature` is present. The model really thought;
         // the content is just encrypted for round-trip. Render as "…" so
         // the reader sees the beat of cognition happened.
-        flushMontage();
         const thinking = (block as any).thinking || "";
-        const visible = thinking.trim() ? truncate(thinking, 300) : "…";
-        panels.push({
+        const visibleLine = thinking.trim() ? truncate(thinking, 300) : "…";
+
+        if (pendingThoughtPanel) {
+          pendingThoughtPanel.panel.lines.push(visibleLine);
+          pendingThoughtPanel.panel.lineNumbers.push(record.lineNumber);
+          continue;
+        }
+
+        flushMontage();
+        const usage = msgId ? messageUsage.get(msgId) ?? {} : {};
+        const panel: Panel = {
           type: "claude-think",
-          lines: [visible],
+          lines: [visibleLine],
           lineNumbers: [record.lineNumber],
-          ...extractTokenUsage(record),
-        });
+          ...usage,
+        };
+        panels.push(panel);
+        if (msgId) {
+          pendingThoughtPanel = { panel, messageId: msgId };
+          messagesWithThoughtPanel.add(msgId);
+        }
       } else if (block.type === "tool_use") {
         const toolName = (block as any).name || "unknown_tool";
         const input = (block as any).input || {};
@@ -528,8 +605,6 @@ export function groupIntoPanels(
             lineNumbers: [record.lineNumber],
           });
         } else {
-          const msg = record.raw.message as { id?: string } | undefined;
-          const { totalInputTokens, outputTokens } = extractTokenUsage(record);
           pendingTools.push({
             name: toolName,
             summary,
@@ -537,9 +612,7 @@ export function groupIntoPanels(
             subpanels: agentSubpanels,
             agentType,
             lineNumber: record.lineNumber,
-            messageId: msg?.id,
-            totalInputTokens,
-            outputTokens,
+            messageId: msgId,
           });
         }
       }

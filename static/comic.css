@@ -515,21 +515,17 @@ body.show-tokens .token-badge {
   font-size: 0.65rem;
 }
 
-/* Token badge inside a batch header: inline, not floated into the margin. */
-.batch-header .token-badge {
-  position: static;
-  display: inline-block;
-  margin: 0;
-}
-
 /* Round-trip divider: Claude saw the previous tool's result, then called
-   again. Shown between sequential batches within one montage. */
+   again. Shown between sequential batches within one montage, or at the top
+   of a montage whose first batch "owns" its API call's tokens. Carries the
+   new turn's token badge when that batch has no thought/speech panel above. */
 .montage-roundtrip {
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 10px 0;
   position: relative;
+  gap: 6px;
 }
 
 .montage-roundtrip::before,
@@ -544,8 +540,16 @@ body.show-tokens .token-badge {
 .roundtrip-arrow {
   color: var(--dancing-red);
   font-size: 1.1rem;
-  padding: 0 10px;
   font-weight: bold;
+}
+
+/* Token badge on a round-trip marker: inline, not floated to the margin
+   like the default token-badge. Always visible (not gated by show-tokens)
+   since it's the whole point of the marker. */
+.montage-roundtrip .token-badge {
+  position: static;
+  display: inline-block;
+  margin: 0;
 }
 
 .tool-command {
