@@ -559,7 +559,15 @@ export function groupIntoPanels(
         if (!text.trim()) continue;
 
         if (pendingThoughtPanel) {
-          pendingThoughtPanel.panel.lines.push(text.trim());
+          const lines = pendingThoughtPanel.panel.lines;
+          // If the previous line is a hidden-thinking placeholder, inline
+          // the text after it so the bubble reads "… text" on one line
+          // instead of splitting over two paragraphs.
+          if (lines.length > 0 && lines[lines.length - 1] === "…") {
+            lines[lines.length - 1] = "… " + text.trim();
+          } else {
+            lines.push(text.trim());
+          }
           pendingThoughtPanel.panel.lineNumbers.push(record.lineNumber);
           continue;
         }
