@@ -1,185 +1,104 @@
 # Layout Plan: Webtoon Comic Redesign
 
+This file started as a forward-looking plan and is now a current-state
+document with the parts that are still unbuilt called out at the end.
+
 ## Design Principles
 
-1. **Scroll is pacing.** The reader scrolls down through the conversation. Transitions happen relative to scroll position, not time.
-2. **Human is grounded.** Human speech has no animation — it's already there. You typed it, it doesn't "happen."
-3. **Claude arrives.** Claude's speech appears like typing. Thoughts fade in. Actions expand then fold away.
-4. **Conversation is center-left, backstage is right.** Human is at the left. Claude's dialogue is center — not far right — because the right side is reserved for behind-the-scenes work (actions, subagents). The stage has depth to the right.
-5. **Work folds up when done.** Montages start expanded, then collapse as you scroll past them. Like real Claude usage: you watch the tools fly, then move on.
-6. **Colors and typography are a separate arc.** This plan covers layout, positioning, and scroll behavior only.
+1. **Human is grounded.** Human speech has no animation — it's already there. You typed it, it doesn't "happen."
+2. **Claude arrives.** Claude's speech appears like typing. Thoughts fade in.
+3. **The robot has its own column.** A single robot graphic slides vertically through a sequence of Claude's thinks → actions → speech. Between robot-sequences (separated by human speech), a fresh robot appears.
+4. **Conversation zone ≠ backstage zone.** Claude's speech is closer to the robot's column (intimate, dialogue); think/action/spawn-agent have a bigger gap from the robot (backstage, behind-the-scenes work).
+5. **Colors and typography are a separate arc.** This plan covers layout, positioning, and reveal behavior only.
 
 ---
 
-## Spatial Model
+## Reveal Model
 
-The container widens to ~900px to make room for backstage. Think of horizontal zones:
+The comic is **keyboard-driven**, not scroll-driven. On load only the first top-level panel is visible; the rest keep their layout footprint (via `visibility: hidden`) so the full conversation length is apparent.
 
-```
-|  Left (0-35%)  |  Center (35-65%)  |  Right (65-100%)  |
-|  Human speech   |  Claude dialogue  |  Backstage:       |
-|  👤 avatar      |  🤖 avatar        |  action montages  |
-|                 |  think bubbles    |  subagent comics  |
-|                 |  notifications    |                   |
-|                 |  narrator         |                   |
-```
+- **→** reveals the next hidden top-level panel and smooth-scrolls it into view.
+- **←** re-hides the most recently revealed panel.
+- **Reveal all** button in the toolbar fills in every panel at once (and shows speech bubbles fully-typed).
 
-These aren't rigid columns — it's a single flex container and each panel type has its own `align-self` + `max-width` + `margin-left` to land in the right zone. The zones overlap; nothing is grid-locked.
+Scroll happens *before* typing starts (we wait for `scrollend` with a 900ms timeout fallback), so the reader has arrived at the panel before the text streams in. For human-speech panels the scroll target also includes the absolutely-positioned avatar hanging below the bubble.
 
-## Panel Layout Changes
-
-### Human Speech
-- **Position:** Left-aligned (unchanged). Lives in the left zone.
-- **Avatar:** Small circular icon to the left of the bubble (replaces "Human" text label). CSS circle with emoji or simple SVG.
-- **Max-width:** ~50% of container — human messages don't need to be wide.
-- **Transition:** None. Already there.
-
-### Claude Speech
-- **Position:** Center-right. `align-self: flex-end` with a `margin-right` that reserves space for the backstage zone. Alternatively, `align-self: center` or a calculated offset. The key: Claude's dialogue should *not* hug the right edge.
-- **Avatar:** Small circular icon to the right of the bubble (replaces "Claude" text label).
-- **Max-width:** ~50% of container.
-- **Transition:** Typewriter reveal. The bubble appears immediately but the text is masked and reveals left-to-right over ~600ms. Uses CSS `clip-path` animation. Plays once on first scroll into view, then stays revealed.
-- **Implementation:** Add class `unrevealed` by default. IntersectionObserver adds `revealed` class on first entry. CSS animation runs on `.revealed .claude-bubble`.
-
-### Claude Think
-- **Position:** Same zone as Claude speech (center-right), slightly narrower.
-- **Avatar:** None (thoughts don't need a face).
-- **Transition:** Gentle fade-in. Opacity 0 → 1 over ~400ms. Plays once.
-
-### Action Montage
-- **Position:** Right zone. `align-self: flex-end`, no right margin. This is the backstage — furthest right.
-- **Max-width:** ~55% of container.
-- **Transition — the big one:**
-  - Montages render with their `<details>` **open by default** (add `open` attribute).
-  - When the *next panel after the montage* is fully visible in the viewport (IntersectionObserver, `threshold: 1.0`), the montage collapses.
-  - On collapse: measure height before, close the `<details>`, measure height after, adjust `window.scrollY` by the difference to keep the reading position stable.
-  - If the user scrolls back up and the montage re-enters the viewport, it re-expands. Scroll adjustment in reverse.
-- **Collapse animation:** Instant (simpler, less jarring with the scroll adjustment).
-
-### Subagent Comics (inside montages)
-- **Same collapse-on-scroll-past behavior** as montages. They start open, fold up when the reader has moved past.
-- **Position:** Already indented inside the montage (which is now in the right zone), so they're the most "backstage" element.
-
-### Notifications
-- **Position:** Center-right, same zone as Claude speech. These are Claude's workers reporting back *to* the conversation.
-- **Transition:** Small slide-in from the right, ~200ms. Subtle, like a messenger arriving.
-
-### Narrator
-- **Position:** Centered (unchanged). Spans across the zones — it's the omniscient voice.
-- **Transition:** Fade-in, ~400ms.
+Top-level panels are the direct children of `.comic-strip` plus panels nested inside `.comic-strip > .robot-sequence > .sequence-panels`. Subagent sub-panels deeper in the tree are *not* part of the reveal flow.
 
 ---
 
-## Avatar Design
+## Spatial Model (current)
 
-Both avatars are pure CSS — no image files needed.
+All positions are in % of the comic-strip's content width (max 1600px, padding 40px).
 
 ```
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-.human-avatar {
-  background: #0f3460;
-  border: 2px solid #3282b8;
-}
-
-.claude-avatar {
-  background: #1a1a40;
-  border: 2px solid #e94560;
-}
+| Left (0-55%)    | Robot col (~22-26%) | Claude zone (27-100%) |
+| Human speech    | 🤖                  | speech (27-82%)       |
+|                 |                     | think/action (50-100%)|
+|                 |                     | spawn-agent (50-100%) |
 ```
 
-Layout: each speech panel becomes a flex row with the avatar on the outside edge and the bubble filling the rest.
+- **Human speech** — `align-self: flex-start`, `max-width: 55%`. Avatar is absolutely positioned, hangs below the bubble, doesn't push later content.
+- **Robot column** — `position: absolute; left: 22%` inside a `.robot-sequence` wrapper. Robot right edge at ~26%.
+- **Claude speech** — `align-self: flex-end; width: 55%; margin-right: 18%` → spans 27%-82%. Tight to the robot (dialogue feel).
+- **Think / action-montage / spawn-agent** — `align-self: flex-end; width: 50%` → spans 50%-100%. Bigger gap from robot (backstage feel).
+- **Notification** — `align-self: flex-end; max-width: 50%; margin-right: 30%` → center-right (unchanged from pre-sequence layout).
+- **Narrator** — `align-self: center; max-width: 90%`.
+
+Speech bubbles (both sides) are `width: fit-content`, so they grow from their left edge as text types in. Panel heights are frozen to their fully-typed size before blanking so typing doesn't reflow the rest of the page.
 
 ---
 
-## Scroll Behavior: Implementation Plan
+## Robot Sequence
 
-### IntersectionObserver Setup
+Contiguous robot-type panels are wrapped in a `<div class="robot-sequence">` at render time:
 
-One observer for "entrance" animations (think, speech, notification, narrator):
-```js
-const revealObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting && !entry.target.classList.contains('revealed')) {
-      entry.target.classList.add('revealed');
-      revealObserver.unobserve(entry.target); // once only
-    }
-  });
-}, { threshold: 0.3 });
+```html
+<div class="robot-sequence">
+  <img class="sequence-robot" src="robot.png">
+  <div class="sequence-panels">
+    <!-- claude-think / action-montage / spawn-agent / claude-speech,
+         plus any notification panels that arrived mid-sequence -->
+  </div>
+</div>
 ```
 
-One observer for montage/subagent collapse, watching the *next sibling* panel:
-```js
-// For each montage, observe the next panel element.
-// When that next panel is fully visible, collapse the montage.
-document.querySelectorAll('.action-montage, .subagent-details').forEach(montage => {
-  const trigger = montage.nextElementSibling;
-  if (!trigger) return;
+**Grouping rules** (`groupForRendering` in `src/html-generator.ts`):
+- A sequence is a maximal run of robot-type panels.
+- A **claude-speech ends its sequence** — the next robot panel after it starts a fresh sequence with its own robot graphic.
+- **Notifications pass through**: they stay in the DOM where they appear but don't break the sequence. The robot's `translateY` only tracks robot-type panels, so notifications are skipped when picking "last visible panel."
+- **Human speech** breaks a sequence.
+- **Narrator** currently breaks a sequence (TBD whether it should pass through like notifications).
 
-  const collapseObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      const details = montage.querySelector('details');
-      if (entry.isIntersecting && details.open) {
-        // Collapse
-        const heightBefore = montage.offsetHeight;
-        details.open = false;
-        const heightAfter = montage.offsetHeight;
-        window.scrollBy(0, heightAfter - heightBefore);
-      } else if (!entry.isIntersecting && !details.open) {
-        // Re-expand when scrolling back up
-        const heightBefore = montage.offsetHeight;
-        details.open = true;
-        const heightAfter = montage.offsetHeight;
-        window.scrollBy(0, heightAfter - heightBefore);
-      }
-    });
-  }, { threshold: 1.0 });
-
-  collapseObserver.observe(trigger);
-});
-```
-
-### Scroll Anchoring
-
-The browser's native CSS `overflow-anchor: auto` may help, but for the montage collapse we'll do explicit scroll adjustment to be safe. The key invariant: **the panel the reader is looking at must not move on screen.**
+**Robot motion**: the robot is `position: absolute; left: 22%` and `transition: transform 500ms ease`. JS sets `translateY(lastVisibleRobotPanel.offsetTop)`. Motion is therefore pure vertical. Robot is hidden via `:has` until at least one panel in its sequence is visible; initial placement skips the transition so it doesn't slide in from `translateY(0)` on load.
 
 ---
 
-## Spacing (Gap Between Panels)
+## Transitions by Panel Type
 
-Use CSS classes on panels based on what follows them:
+| Panel type       | Entrance                                            | Status |
+|------------------|-----------------------------------------------------|--------|
+| human-speech     | Typewriter, 60 chars/sec, bubble grows from left    | ✅ done |
+| claude-speech    | Typewriter, 180 chars/sec, bubble grows from left   | ✅ done |
+| claude-think     | Fade-in (opacity 0→1 over 400ms)                    | ✅ done |
+| action-montage   | None — appears instantly when revealed              | ❌ not yet |
+| spawn-agent      | None                                                | ❌ not yet |
+| notification     | None (the sequence carries it along)                | ❌ not yet |
+| narrator         | None                                                | ❌ not yet |
 
-| Transition | Gap | Why |
-|---|---|---|
-| think → action-montage | 4px (tight) | thought becomes action immediately |
-| action-montage → claude-speech | 16px (bigger) | a beat while Claude formulates |
-| human-speech → claude-think | 12px (moderate) | conversational pause |
-| anything → notification | 20px (extra) | interruption needs room |
-| Default | 8px (current) | |
+Plus: the robot itself animates its `translateY` whenever the last-revealed robot panel in its sequence changes (reveal or re-hide).
 
-Implementation: either CSS `:has()` selectors or add a `data-next` attribute during HTML generation.
+The speech typewriter persists the typed state only until re-hide: if you press ←, the panel resets to blank and the next → replays the typewriter. The think fade-in re-runs naturally on every visibility change because it's pure CSS transition.
+
+Separate from entrance transitions, the action-montage's own `<details>` expansion animates via `interpolate-size: allow-keywords` + `::details-content` (block-size + opacity, ~250ms). Chrome/Safari only — Firefox degrades to snap.
 
 ---
 
-## Implementation Order
+## Known open items
 
-Prototype one change at a time so we can see each in isolation:
-
-1. **Widen container + reposition all panels** — Establish the three-zone layout. Move Claude speech to center, montages to right. CSS changes + minor HTML (margin/alignment classes).
-2. **Avatars** — Replace text labels with avatar circles. HTML+CSS change.
-3. **Montage starts-open + collapse-on-scroll** — Add `open` attribute + JS observer. The core interaction.
-4. **Typewriter reveal on Claude speech** — CSS animation + JS observer.
-5. **Think bubble fade-in** — CSS animation + JS observer.
-6. **Notification slide-in** — CSS animation + JS observer.
-7. **Spacing refinement** — Adjust gaps between panel types.
-
-Colors, fonts, and visual polish are a separate arc — not in scope here.
+- **Action-montage entrance** — should have some reveal animation (the robot slides to it, but the box itself snaps in). Options: fade in, slide in from the right, or briefly flash the ⚡ACTION⚡ banner.
+- **Spawn-agent entrance** — same.
+- **Notification entrance** — would benefit from a slide-in-from-right (200ms or so) to sell "a messenger arrived mid-flow." Especially important now that notifications live *inside* robot sequences.
+- **Narrator entrance** — fade-in would match think bubbles.
+- **Narrator passthrough** — should a narrator panel break the robot sequence, or pass through like notification? Probably passthrough for contextual narrators, break for scene-transition narrators. No way to distinguish from the parser yet.
+- **Spacing between panels** — still uses the default gap of the containing flex column. The original plan had gap-by-context rules (tight think→action, looser action→speech, extra before notification). Not implemented.
