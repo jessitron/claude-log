@@ -107,6 +107,18 @@ body {
   visibility: hidden;
 }
 
+/* Entrance transitions. Think bubbles fade in on reveal.
+   The asymmetric visibility transition (0s on reveal, delayed on hide)
+   keeps the element painted while it fades out, then snaps it hidden
+   once opacity has reached 0. */
+.comic-strip > .claude-think {
+  transition: opacity 400ms ease, visibility 0s linear 0s;
+}
+.comic-strip > .claude-think.panel-hidden {
+  opacity: 0;
+  transition: opacity 400ms ease, visibility 0s linear 400ms;
+}
+
 /* Source tag — hidden unless body.show-refs is set (debug mode toggle) */
 .source-tag {
   position: absolute;
