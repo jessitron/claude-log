@@ -783,8 +783,6 @@ body.show-tokens .montage-roundtrip .token-badge {
   color: var(--deep-navy);
   margin-top: 6px;
   overflow-x: auto;
-  max-height: 400px;
-  overflow-y: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
