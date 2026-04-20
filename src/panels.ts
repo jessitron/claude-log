@@ -480,17 +480,16 @@ export function groupIntoPanels(
           });
         }
       } else if (block.type === "thinking") {
-        // Redacted/encrypted extended thinking arrives with an empty
-        // `thinking` field (signature only). It's a real API round-trip,
-        // but invisible to the reader — don't flush the montage on it,
-        // or we'd silently split a run of tool calls. The messageId-based
-        // batch grouping already captures the round-trip as a divider.
-        const thinking = (block as any).thinking || "";
-        if (!thinking.trim()) continue;
+        // Omitted thinking (default on Opus 4.7): the `thinking` field is
+        // empty but a `signature` is present. The model really thought;
+        // the content is just encrypted for round-trip. Render as "…" so
+        // the reader sees the beat of cognition happened.
         flushMontage();
+        const thinking = (block as any).thinking || "";
+        const visible = thinking.trim() ? truncate(thinking, 300) : "…";
         panels.push({
           type: "claude-think",
-          lines: [truncate(thinking, 300)],
+          lines: [visible],
           lineNumbers: [record.lineNumber],
           ...extractTokenUsage(record),
         });
