@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Thin wrapper around scripts/show-ref.js so we can just run `./show-ref <ref>`.
+# See scripts/show-ref.js for docs and options.
+set -euo pipefail
+cd "$(dirname "$0")"
+exec node scripts/show-ref.js "$@"
