@@ -18,6 +18,9 @@ Use `./dev` to start a live-reload server at http://localhost:3000.
 ## Project notes
 See `notes/progress.md` for session-by-session progress, design decisions, and what's been learned.
 
+## Resolving panel refs
+When Jessitron points at a panel by its ref (e.g. `episode-8-before:L42` or `agent-abc123:L1,2,3`), use `scripts/show-ref.js` to see the underlying JSONL records with noise filtered out. Supports `-c N` for context, `Lstart-end` ranges, `--full`, and `--raw`.
+
 ## Key design principle
 **Loud defensiveness**: never silently skip schema surprises. Report unknown fields, missing expected fields, and format differences with every parse. The JSONL schema evolves across Claude Code versions — we want to see what's changing.
 
