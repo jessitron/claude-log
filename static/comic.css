@@ -102,8 +102,11 @@ body {
 
 /* Panel reveal: hidden top-level panels keep their layout footprint so
    the full length of the comic is visible, but their contents don't
-   render. Arrow keys walk forward/back through the reveal sequence. */
-.comic-strip > .panel.panel-hidden {
+   render. Arrow keys walk forward/back through the reveal sequence.
+   Panel-hidden is only applied to the reveal system's top-level panels
+   (including those inside a .robot-sequence), never to subagent
+   subpanels deeper in the tree. */
+.panel.panel-hidden {
   visibility: hidden;
 }
 
@@ -111,10 +114,10 @@ body {
    The asymmetric visibility transition (0s on reveal, delayed on hide)
    keeps the element painted while it fades out, then snaps it hidden
    once opacity has reached 0. */
-.comic-strip > .claude-think {
+.claude-think {
   transition: opacity 400ms ease, visibility 0s linear 0s;
 }
-.comic-strip > .claude-think.panel-hidden {
+.claude-think.panel-hidden {
   opacity: 0;
   transition: opacity 400ms ease, visibility 0s linear 400ms;
 }
@@ -243,30 +246,64 @@ body.show-tokens .token-badge {
   border-top-color: var(--grace-blue);
 }
 
-/* === Claude speech === */
-.claude-speech {
+/* === Robot sequence ===
+   Wraps contiguous claude-think / action-montage / spawn-agent /
+   claude-speech panels so a single robot graphic can slide down through
+   them as they reveal. Panels inside the sequence lose their own width
+   and alignment — the sequence owns the layout. */
+.robot-sequence {
   align-self: flex-end;
-  /* Fixed width (not max-width) so the panel keeps a stable left edge
-     even when the bubble inside is empty or narrow. The bubble can then
-     grow rightward from the avatar without the panel sliding around. */
-  width: 55%;
-  margin-right: 30%;
+  /* 55% for the panel column + room for the robot and its gap. */
+  width: calc(55% + 76px);
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  position: relative;
 }
 
-.robot-avatar {
+.sequence-robot {
   height: 90px;
+  width: auto;
   flex-shrink: 0;
-  margin-top: 4px;
+  /* translateY gets set from JS to the offsetTop of the last-revealed
+     panel in the sequence, producing the "walk down" effect. */
+  transition: transform 500ms ease;
+  /* The robot only appears once at least one panel in the sequence is
+     visible; otherwise a lonely robot would hover next to reserved but
+     invisible panel space. */
+  visibility: hidden;
 }
 
+.robot-sequence:has(> .sequence-panels > .panel:not(.panel-hidden)) > .sequence-robot {
+  visibility: visible;
+}
+
+.sequence-panels {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Panels inside a sequence inherit its layout instead of their own. */
+.sequence-panels > .claude-think,
+.sequence-panels > .action-montage,
+.sequence-panels > .spawn-agent,
+.sequence-panels > .claude-speech {
+  align-self: stretch;
+  width: auto;
+  max-width: none;
+  margin-right: 0;
+}
+
+/* === Claude speech === */
 .claude-speech .speech-bubble {
   /* Content-sized so the bubble's right edge extends as text is typed
      in. min-width: 0 lets it shrink to wrap text rather than overflow. */
   min-width: 0;
   max-width: 100%;
+  width: fit-content;
 }
 
 .claude-bubble {

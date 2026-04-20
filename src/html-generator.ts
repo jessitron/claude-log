@@ -63,11 +63,13 @@ function renderPanel(panel: Panel, index: number): string {
     </div>`;
 
     case "claude-speech":
+      // The robot itself belongs to the surrounding .robot-sequence —
+      // it slides into this panel's position as the final step of the
+      // sequence rather than being baked into the speech markup.
       return `
     <div class="panel claude-speech" ${attrs}>
       ${tag}
       ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
-      <img class="character-avatar robot-avatar" src="robot.png" alt="Claude">
       <div class="speech-bubble claude-bubble">
         ${panel.lines.map((l) => `<p>${escapeHtmlWithBold(l)}</p>`).join("\n        ")}
       </div>
@@ -196,12 +198,59 @@ function renderTotals(totals: ConversationTotals | undefined): string {
     </div>`;
 }
 
+// Panel types that belong to a "robot sequence" — contiguous panels in
+// which Claude thinks, acts, and (optionally) speaks. The sequence gets
+// a single robot graphic on the left that slides down from panel to
+// panel as they're revealed. A claude-speech ends its sequence; any
+// robot-type panel after that starts a fresh one.
+const ROBOT_PANEL_TYPES = new Set([
+  "claude-think",
+  "action-montage",
+  "spawn-agent",
+  "claude-speech",
+]);
+
+type RenderGroup =
+  | { kind: "single"; panel: Panel; index: number }
+  | { kind: "sequence"; entries: { panel: Panel; index: number }[] };
+
+function groupForRendering(panels: Panel[]): RenderGroup[] {
+  const groups: RenderGroup[] = [];
+  let current: { panel: Panel; index: number }[] | null = null;
+  panels.forEach((panel, i) => {
+    if (!ROBOT_PANEL_TYPES.has(panel.type)) {
+      current = null;
+      groups.push({ kind: "single", panel, index: i });
+      return;
+    }
+    if (current === null) {
+      current = [];
+      groups.push({ kind: "sequence", entries: current });
+    }
+    current.push({ panel, index: i });
+    if (panel.type === "claude-speech") current = null;
+  });
+  return groups;
+}
+
+function renderGroup(group: RenderGroup): string {
+  if (group.kind === "single") return renderPanel(group.panel, group.index);
+  const inner = group.entries.map((e) => renderPanel(e.panel, e.index)).join("\n");
+  return `
+    <div class="robot-sequence">
+      <img class="sequence-robot" src="robot.png" alt="Claude">
+      <div class="sequence-panels">
+${inner}
+      </div>
+    </div>`;
+}
+
 export function generateHtml(
   panels: Panel[],
   title: string,
   totals?: ConversationTotals
 ): string {
-  const panelHtml = panels.map((p, i) => renderPanel(p, i)).join("\n");
+  const panelHtml = groupForRendering(panels).map(renderGroup).join("\n");
   const totalsHtml = renderTotals(totals);
 
   return `<!DOCTYPE html>
@@ -273,8 +322,30 @@ ${panelHtml}
     // Left arrow re-hides the most recently revealed panel. "Reveal all"
     // shows everything at once with no typing animation.
     (function panelReveal() {
-      const panels = Array.from(document.querySelectorAll('.comic-strip > .panel'));
+      // Top-level panels are either direct children of the comic-strip or
+      // children of a .sequence-panels inside a .robot-sequence. Panels
+      // deeper than that (subagent subpanels) aren't part of the reveal
+      // flow.
+      const panels = Array.from(document.querySelectorAll(
+        '.comic-strip > .panel, .comic-strip > .robot-sequence > .sequence-panels > .panel'
+      ));
       if (panels.length === 0) return;
+
+      const sequences = Array.from(document.querySelectorAll('.comic-strip > .robot-sequence'));
+      function updateSequenceRobot(seq) {
+        const seqPanels = Array.from(seq.querySelectorAll(':scope > .sequence-panels > .panel'));
+        let lastVisible = null;
+        for (let i = 0; i < seqPanels.length; i++) {
+          if (!seqPanels[i].classList.contains('panel-hidden')) lastVisible = seqPanels[i];
+        }
+        const robot = seq.querySelector(':scope > .sequence-robot');
+        if (!robot || !lastVisible) return;
+        robot.style.transform = 'translateY(' + lastVisible.offsetTop + 'px)';
+      }
+      function updateRobotsForPanel(el) {
+        const seq = el.closest('.robot-sequence');
+        if (seq) updateSequenceRobot(seq);
+      }
 
       // For each speech bubble (Claude or Human): walk its text nodes,
       // stash the originals, freeze the panel's rendered height so the
@@ -338,6 +409,18 @@ ${panelHtml}
         if (i > 0) el.classList.add('panel-hidden');
       });
 
+      // Initial robot positions: each sequence's robot snaps to whichever
+      // panel happens to be visible (usually the first panel in the
+      // sequence, if the sequence leads the whole comic). Skip the
+      // transition for this first placement so it doesn't slide in from
+      // translateY(0) on load.
+      sequences.forEach(function(seq) {
+        const robot = seq.querySelector(':scope > .sequence-robot');
+        if (robot) robot.style.transition = 'none';
+        updateSequenceRobot(seq);
+        if (robot) requestAnimationFrame(function() { robot.style.transition = ''; });
+      });
+
       // If the first panel happens to be a Claude speech, start typing it.
       const firstEntry = entryByPanel.get(panels[0]);
       if (firstEntry) typeEntry(firstEntry);
@@ -390,6 +473,7 @@ ${panelHtml}
         if (i < 0) return;
         const el = panels[i];
         el.classList.remove('panel-hidden');
+        updateRobotsForPanel(el);
         scrollPanelIntoView(el, function() {
           const entry = entryByPanel.get(el);
           if (entry) typeEntry(entry);
@@ -400,6 +484,7 @@ ${panelHtml}
         if (i < 0) return;
         const el = panels[i];
         el.classList.add('panel-hidden');
+        updateRobotsForPanel(el);
         const entry = entryByPanel.get(el);
         if (entry) {
           entry.aborted = true;
@@ -413,6 +498,7 @@ ${panelHtml}
           if (entry) showEntryFully(entry);
           el.classList.remove('panel-hidden');
         });
+        sequences.forEach(updateSequenceRobot);
       }
 
       document.getElementById('reveal-all').addEventListener('click', revealAll);
