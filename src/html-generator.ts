@@ -355,14 +355,45 @@ ${panelHtml}
         return -1;
       }
 
+      function scrollPanelIntoView(el, onDone) {
+        // Human-speech panels have their avatar absolutely positioned
+        // below the panel box (top: 100%), so getBoundingClientRect on
+        // the panel alone misses it. Measure the avatar too, and scroll
+        // so the whole thing fits before we start typing.
+        const rect = el.getBoundingClientRect();
+        const avatar = el.querySelector('.human-avatar');
+        const avatarBottom = avatar ? avatar.getBoundingClientRect().bottom : rect.bottom;
+        const top = rect.top;
+        const bottom = Math.max(rect.bottom, avatarBottom);
+        const vh = window.innerHeight;
+        let delta = 0;
+        if (bottom > vh) delta = bottom - vh + 10;
+        else if (top < 0) delta = top - 10;
+
+        if (delta === 0) { onDone(); return; }
+
+        let called = false;
+        function finish() {
+          if (called) return;
+          called = true;
+          window.removeEventListener('scrollend', finish);
+          clearTimeout(fallback);
+          onDone();
+        }
+        window.addEventListener('scrollend', finish);
+        const fallback = setTimeout(finish, 900);
+        window.scrollBy({ top: delta, behavior: 'smooth' });
+      }
+
       function revealNext() {
         const i = nextHiddenIndex();
         if (i < 0) return;
         const el = panels[i];
         el.classList.remove('panel-hidden');
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        const entry = entryByPanel.get(el);
-        if (entry) typeEntry(entry);
+        scrollPanelIntoView(el, function() {
+          const entry = entryByPanel.get(el);
+          if (entry) typeEntry(entry);
+        });
       }
       function hideLast() {
         const i = lastVisibleIndex();
