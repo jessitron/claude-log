@@ -284,17 +284,17 @@ body.show-tokens .token-badge {
   align-self: flex-end;
   width: 55%;
   max-width: none;
-  margin-right: 8%;
+  margin-right: 18%;
 }
 
 .sequence-robot {
   position: absolute;
   top: 0;
-  /* The robot's column. Its right edge sits at ~35% of the content
-     width; speech starts at 37% (small gap), think/action at 50%
+  /* The robot's column. Its right edge sits at ~26% of the content
+     width; speech starts at 27% (tight gap), think/action at 50%
      (bigger gap). Robot only moves vertically — translateY tracks the
      current panel's offsetTop. */
-  left: 31%;
+  left: 22%;
   height: 90px;
   width: auto;
   transition: transform 500ms ease;
