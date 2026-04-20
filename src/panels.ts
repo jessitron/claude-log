@@ -480,16 +480,20 @@ export function groupIntoPanels(
           });
         }
       } else if (block.type === "thinking") {
-        flushMontage();
+        // Redacted/encrypted extended thinking arrives with an empty
+        // `thinking` field (signature only). It's a real API round-trip,
+        // but invisible to the reader — don't flush the montage on it,
+        // or we'd silently split a run of tool calls. The messageId-based
+        // batch grouping already captures the round-trip as a divider.
         const thinking = (block as any).thinking || "";
-        if (thinking.trim()) {
-          panels.push({
-            type: "claude-think",
-            lines: [truncate(thinking, 300)],
-            lineNumbers: [record.lineNumber],
-            ...extractTokenUsage(record),
-          });
-        }
+        if (!thinking.trim()) continue;
+        flushMontage();
+        panels.push({
+          type: "claude-think",
+          lines: [truncate(thinking, 300)],
+          lineNumbers: [record.lineNumber],
+          ...extractTokenUsage(record),
+        });
       } else if (block.type === "tool_use") {
         const toolName = (block as any).name || "unknown_tool";
         const input = (block as any).input || {};
