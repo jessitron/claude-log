@@ -263,6 +263,34 @@ body.show-tokens .token-badge {
   margin-bottom: 0;
 }
 
+/* Typewriter reveal: the bubble chrome appears immediately, but each
+   paragraph of text is clipped from the right and swept open when the
+   panel scrolls into view. Staggered so multi-paragraph replies feel
+   like typing rather than a single curtain. */
+.claude-speech .claude-bubble p {
+  clip-path: inset(0 100% 0 0);
+}
+
+.claude-speech.revealed .claude-bubble p {
+  animation: typewriter-reveal 500ms ease-out forwards;
+}
+
+.claude-speech.revealed .claude-bubble p:nth-child(2) { animation-delay: 180ms; }
+.claude-speech.revealed .claude-bubble p:nth-child(3) { animation-delay: 360ms; }
+.claude-speech.revealed .claude-bubble p:nth-child(4) { animation-delay: 540ms; }
+.claude-speech.revealed .claude-bubble p:nth-child(5) { animation-delay: 720ms; }
+.claude-speech.revealed .claude-bubble p:nth-child(6) { animation-delay: 900ms; }
+.claude-speech.revealed .claude-bubble p:nth-child(7) { animation-delay: 1080ms; }
+.claude-speech.revealed .claude-bubble p:nth-child(n+8) { animation-delay: 1260ms; }
+
+@keyframes typewriter-reveal {
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .claude-speech .claude-bubble p { clip-path: none; animation: none; }
+}
+
 /* === Thinking === */
 .claude-think {
   align-self: flex-end;
