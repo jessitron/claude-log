@@ -89,8 +89,7 @@ function renderPanel(panel: Panel, index: number): string {
         .filter((d) => d.summary)
         .map((d) => {
           const lines = d.summary.split("\n");
-          const badge = tokenBadge(d.totalInputTokens, d.outputTokens);
-          const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}${badge ? " " + badge : ""}`;
+          const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}`;
           const rest = lines.slice(1).map((l) => `<span class="tool-command">${escapeHtml(l)}</span>`);
           const mainContent = [first, ...rest].join("\n              ");
 
@@ -146,7 +145,6 @@ function renderPanel(panel: Panel, index: number): string {
       return `
     <div class="panel spawn-agent" ${attrs}>
       ${tag}
-      ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
       <details class="spawn-agent-burst">
         <summary class="spawn-agent-summary">
           <span class="spawn-agent-type">${escapeHtml(agentType)}</span>
@@ -266,6 +264,27 @@ ${panelHtml}
     hotkeyToggle('toggle-refs', 'show-refs', 'r', 'Show refs', 'Hide refs');
     hotkeyToggle('toggle-tokens', 'show-tokens', 't', 'Show tokens', 'Hide tokens');
     hotkeyToggle('toggle-queued', 'show-queued', 'q', 'Show queued', 'Hide queued');
+
+    // Typewriter reveal for Claude speech. Trigger once when the panel
+    // scrolls into view; after that it stays revealed. prefers-reduced-motion
+    // and old browsers fall back to instant reveal.
+    (function revealClaudeSpeech() {
+      var panels = document.querySelectorAll('.claude-speech');
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || !('IntersectionObserver' in window)) {
+        panels.forEach(function(el) { el.classList.add('revealed'); });
+        return;
+      }
+      var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting && !entry.target.classList.contains('revealed')) {
+            entry.target.classList.add('revealed');
+            obs.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.25 });
+      panels.forEach(function(el) { obs.observe(el); });
+    })();
 
     document.addEventListener('click', function(e) {
       const tag = e.target.closest('.source-tag');

@@ -24,8 +24,6 @@ export interface ToolDetail {
   output?: string; // tool result output, if available
   subpanels?: Panel[]; // for Agent tools: the subagent's conversation as panels
   agentType?: string;  // e.g. "Explore"
-  totalInputTokens?: number; // input_tokens + cache_creation + cache_read for this tool's assistant call
-  outputTokens?: number; // output_tokens generated on this tool's assistant call
 }
 
 export interface Panel {
@@ -35,8 +33,8 @@ export interface Panel {
   toolDetails?: ToolDetail[]; // per-tool detail for expandable view
   lineNumbers: number[]; // source line numbers for traceability
   sourceFile?: string;   // basename of JSONL file these records came from
-  totalInputTokens?: number; // for single-record panels: input + cache_creation + cache_read
-  outputTokens?: number; // for single-record panels: output_tokens from usage
+  totalInputTokens?: number; // for assistant-text/think panels: input + cache_creation + cache_read
+  outputTokens?: number; // for assistant-text/think panels: output_tokens from usage
   queued?: boolean;      // rendered from an enqueue or mid-turn async injection;
                          // hidden by default, revealed via the 'q' toggle
 }
@@ -277,8 +275,6 @@ export function groupIntoPanels(
     subpanels?: Panel[];
     agentType?: string;
     lineNumber: number;
-    totalInputTokens?: number;
-    outputTokens?: number;
   }[] = [];
 
   // Notifications that arrive mid-montage get deferred until after the montage flushes
@@ -308,8 +304,6 @@ export function groupIntoPanels(
       output: t.output,
       subpanels: t.subpanels,
       agentType: t.agentType,
-      totalInputTokens: t.totalInputTokens,
-      outputTokens: t.outputTokens,
     }));
     panels.push({
       type: "action-montage",
@@ -490,10 +484,8 @@ export function groupIntoPanels(
               output,
               subpanels: agentSubpanels,
               agentType,
-              ...extractTokenUsage(record),
             }],
             lineNumbers: [record.lineNumber],
-            ...extractTokenUsage(record),
           });
         } else {
           pendingTools.push({
@@ -503,7 +495,6 @@ export function groupIntoPanels(
             subpanels: agentSubpanels,
             agentType,
             lineNumber: record.lineNumber,
-            ...extractTokenUsage(record),
           });
         }
       }
