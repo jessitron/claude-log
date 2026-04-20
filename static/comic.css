@@ -266,14 +266,16 @@ body.show-tokens .token-badge {
   gap: 8px;
 }
 
-/* Panels inside the sequence keep their own positioning — speech lives
-   in the dialogue column (15%-70% of container), everything else is in
-   the backstage column (45%-100%). */
+/* Panels inside the sequence all sit to the right of the fixed robot
+   column. Speech is closer to the robot (smaller gap, more intimate
+   dialogue feel); think/action have a bigger gap (backstage, further
+   from the speaker). Widths are picked so all three fit to the right of
+   the robot without overlapping it. */
 .sequence-panels > .claude-think,
 .sequence-panels > .action-montage,
 .sequence-panels > .spawn-agent {
   align-self: flex-end;
-  width: 55%;
+  width: 50%;
   max-width: none;
   margin-right: 0;
 }
@@ -282,22 +284,21 @@ body.show-tokens .token-badge {
   align-self: flex-end;
   width: 55%;
   max-width: none;
-  margin-right: 30%;
+  margin-right: 8%;
 }
 
 .sequence-robot {
   position: absolute;
   top: 0;
-  left: 0;
+  /* The robot's column. Its right edge sits at ~35% of the content
+     width; speech starts at 37% (small gap), think/action at 50%
+     (bigger gap). Robot only moves vertically — translateY tracks the
+     current panel's offsetTop. */
+  left: 31%;
   height: 90px;
   width: auto;
-  /* JS sets translate(x, y) to place the robot just-left-of the last
-     revealed panel. transitions both axes so the handoff from
-     backstage to the dialogue column slides smoothly. */
   transition: transform 500ms ease;
-  /* The robot only appears once at least one panel in the sequence is
-     visible; otherwise a lonely robot would hover next to reserved but
-     invisible panel space. */
+  /* Hidden until at least one panel in the sequence is visible. */
   visibility: hidden;
 }
 

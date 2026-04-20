@@ -332,11 +332,10 @@ ${panelHtml}
       if (panels.length === 0) return;
 
       const sequences = Array.from(document.querySelectorAll('.comic-strip > .robot-sequence'));
-      // Robot width + gap — must match the robot image's rendered width
-      // plus the visual gap we want between it and the panel it's next
-      // to. 90px tall × aspect ratio 181/246 ≈ 66px wide; plus ~10px
-      // breathing room.
-      const ROBOT_OFFSET = 76;
+      // The robot's horizontal position is fixed by CSS (left: 31% of
+      // the sequence, which spans the comic-strip content width); only
+      // its vertical position changes as it walks down from one panel
+      // to the next.
       function updateSequenceRobot(seq) {
         const seqPanels = Array.from(seq.querySelectorAll(':scope > .sequence-panels > .panel'));
         let lastVisible = null;
@@ -345,9 +344,7 @@ ${panelHtml}
         }
         const robot = seq.querySelector(':scope > .sequence-robot');
         if (!robot || !lastVisible) return;
-        const x = lastVisible.offsetLeft - ROBOT_OFFSET;
-        const y = lastVisible.offsetTop;
-        robot.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+        robot.style.transform = 'translateY(' + lastVisible.offsetTop + 'px)';
       }
       function updateRobotsForPanel(el) {
         const seq = el.closest('.robot-sequence');
