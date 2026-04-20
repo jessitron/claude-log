@@ -543,13 +543,16 @@ body.show-tokens .token-badge {
   font-weight: bold;
 }
 
-/* Token badge on a round-trip marker: inline, not floated to the margin
-   like the default token-badge. Always visible (not gated by show-tokens)
-   since it's the whole point of the marker. */
+/* Token badge on a round-trip marker: inline (not floated to the margin
+   like the default token-badge), but still gated by body.show-tokens so
+   the user decides when to see the numbers. */
 .montage-roundtrip .token-badge {
   position: static;
-  display: inline-block;
   margin: 0;
+}
+
+body.show-tokens .montage-roundtrip .token-badge {
+  display: inline-block;
 }
 
 .tool-command {
