@@ -265,27 +265,6 @@ ${panelHtml}
     hotkeyToggle('toggle-tokens', 'show-tokens', 't', 'Show tokens', 'Hide tokens');
     hotkeyToggle('toggle-queued', 'show-queued', 'q', 'Show queued', 'Hide queued');
 
-    // Typewriter reveal for Claude speech. Trigger once when the panel
-    // scrolls into view; after that it stays revealed. prefers-reduced-motion
-    // and old browsers fall back to instant reveal.
-    (function revealClaudeSpeech() {
-      var panels = document.querySelectorAll('.claude-speech');
-      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (reduce || !('IntersectionObserver' in window)) {
-        panels.forEach(function(el) { el.classList.add('revealed'); });
-        return;
-      }
-      var obs = new IntersectionObserver(function(entries) {
-        entries.forEach(function(entry) {
-          if (entry.isIntersecting && !entry.target.classList.contains('revealed')) {
-            entry.target.classList.add('revealed');
-            obs.unobserve(entry.target);
-          }
-        });
-      }, { threshold: 0.25 });
-      panels.forEach(function(el) { obs.observe(el); });
-    })();
-
     document.addEventListener('click', function(e) {
       const tag = e.target.closest('.source-tag');
       if (!tag) return;
