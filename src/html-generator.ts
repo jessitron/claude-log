@@ -86,52 +86,73 @@ function renderPanel(panel: Panel, index: number): string {
     </div>`;
 
     case "action-montage": {
-      const details = panel.toolDetails || [];
-      const detailItems = details
-        .filter((d) => d.summary)
-        .map((d) => {
-          const lines = d.summary.split("\n");
-          const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}`;
-          const rest = lines.slice(1).map((l) => `<span class="tool-command">${escapeHtml(l)}</span>`);
-          const mainContent = [first, ...rest].join("\n              ");
+      const renderToolItem = (d: ToolDetail): string => {
+        const lines = d.summary.split("\n");
+        const first = `<strong>${escapeHtml(d.name)}</strong> ${escapeHtml(lines[0])}`;
+        const rest = lines.slice(1).map((l) => `<span class="tool-command">${escapeHtml(l)}</span>`);
+        const mainContent = [first, ...rest].join("\n              ");
 
-          let extras = "";
-
-          // Subagent comic
-          if (d.subpanels && d.subpanels.length > 0) {
-            const subHtml = d.subpanels.map((sp, si) => renderPanel(sp, si)).join("\n");
-            const label = d.agentType || "Agent";
-            extras += `
+        let extras = "";
+        if (d.subpanels && d.subpanels.length > 0) {
+          const subHtml = d.subpanels.map((sp, si) => renderPanel(sp, si)).join("\n");
+          const label = d.agentType || "Agent";
+          extras += `
               <details class="subagent-details">
                 <summary class="subagent-toggle">${escapeHtml(label)} subcomic (${d.subpanels.length} panels)</summary>
                 <div class="subagent-comic">
                   ${subHtml}
                 </div>
               </details>`;
-          }
-
-          // Tool output — open by default; the [−] summary minimizes it.
-          if (d.output) {
-            const truncatedOutput = d.output.length > 2000 ? d.output.slice(0, 2000) + "\n…" : d.output;
-            extras += `
+        }
+        if (d.output) {
+          const truncatedOutput = d.output.length > 2000 ? d.output.slice(0, 2000) + "\n…" : d.output;
+          extras += `
               <details class="tool-output-details" open>
                 <summary class="tool-output-toggle" title="Toggle output"></summary>
                 <pre class="tool-output">${escapeHtml(truncatedOutput)}</pre>
               </details>`;
-          }
+        }
+        return `<li>${mainContent}${extras}</li>`;
+      };
 
-          return `<li>${mainContent}${extras}</li>`;
+      // Prefer batch rendering. Fall back to flat toolDetails if batches
+      // are absent (shouldn't happen for panels built by panels.ts, but
+      // keeps the renderer defensive).
+      const batches = panel.batches && panel.batches.length > 0
+        ? panel.batches
+        : [{ tools: panel.toolDetails || [], totalInputTokens: undefined, outputTokens: undefined }];
+
+      const batchHtml = batches
+        .map((batch, bi) => {
+          const tools = batch.tools.filter((d) => d.summary);
+          if (tools.length === 0) return "";
+          const items = tools.map(renderToolItem).join("\n            ");
+          const badge = tokenBadge(batch.totalInputTokens, batch.outputTokens);
+          const parallelTag = tools.length > 1
+            ? `<span class="batch-parallel">parallel ×${tools.length}</span>`
+            : "";
+          const header = (badge || parallelTag)
+            ? `<div class="batch-header">${parallelTag}${badge}</div>`
+            : "";
+          const divider = bi > 0
+            ? `<div class="montage-roundtrip" title="New round-trip: Claude saw the previous tool results, then called again"><span class="roundtrip-arrow">↻</span></div>`
+            : "";
+          return `${divider}<div class="montage-batch">${header}<ul class="montage-details">
+            ${items}
+          </ul></div>`;
         })
-        .join("\n            ");
+        .filter(Boolean)
+        .join("\n          ");
+
       const summary = panel.lines.map((l) => escapeHtml(l)).join("  ");
       return `
     <div class="panel action-montage" ${attrs}>
       ${tag}
       <details class="montage-burst">
         <summary class="montage-summary">${summary}</summary>
-        <ul class="montage-details">
-            ${detailItems}
-        </ul>
+        <div class="montage-batches">
+          ${batchHtml}
+        </div>
       </details>
     </div>`;
     }
@@ -210,6 +231,12 @@ const ROBOT_PANEL_TYPES = new Set([
   "claude-speech",
 ]);
 
+// Panel types that, when they appear inside a robot sequence, are
+// carried along rather than breaking it. Notifications are background
+// interruptions (task reminders, hook output) that don't represent a
+// new speaker — the robot keeps working through them.
+const SEQUENCE_PASSTHROUGH_TYPES = new Set(["notification"]);
+
 type RenderGroup =
   | { kind: "single"; panel: Panel; index: number }
   | { kind: "sequence"; entries: { panel: Panel; index: number }[] };
@@ -218,9 +245,16 @@ function groupForRendering(panels: Panel[]): RenderGroup[] {
   const groups: RenderGroup[] = [];
   let current: { panel: Panel; index: number }[] | null = null;
   panels.forEach((panel, i) => {
-    if (!ROBOT_PANEL_TYPES.has(panel.type)) {
+    const isRobot = ROBOT_PANEL_TYPES.has(panel.type);
+    const isPassthrough = SEQUENCE_PASSTHROUGH_TYPES.has(panel.type);
+    if (!isRobot && !isPassthrough) {
       current = null;
       groups.push({ kind: "single", panel, index: i });
+      return;
+    }
+    if (isPassthrough) {
+      if (current !== null) current.push({ panel, index: i });
+      else groups.push({ kind: "single", panel, index: i });
       return;
     }
     if (current === null) {
@@ -332,15 +366,25 @@ ${panelHtml}
       if (panels.length === 0) return;
 
       const sequences = Array.from(document.querySelectorAll('.comic-strip > .robot-sequence'));
-      // The robot's horizontal position is fixed by CSS (left: 31% of
-      // the sequence, which spans the comic-strip content width); only
-      // its vertical position changes as it walks down from one panel
-      // to the next.
+      // The robot's horizontal position is fixed by CSS; only its vertical
+      // position changes as it walks down from one robot panel to the
+      // next. Passthrough panels (notifications) inside a sequence are
+      // skipped when picking the last-visible panel — the robot holds
+      // its previous position rather than hopping onto an unrelated box.
+      const ROBOT_CLASSES = ['claude-think', 'action-montage', 'spawn-agent', 'claude-speech'];
+      function isRobotPanel(el) {
+        for (let i = 0; i < ROBOT_CLASSES.length; i++) {
+          if (el.classList.contains(ROBOT_CLASSES[i])) return true;
+        }
+        return false;
+      }
       function updateSequenceRobot(seq) {
         const seqPanels = Array.from(seq.querySelectorAll(':scope > .sequence-panels > .panel'));
         let lastVisible = null;
         for (let i = 0; i < seqPanels.length; i++) {
-          if (!seqPanels[i].classList.contains('panel-hidden')) lastVisible = seqPanels[i];
+          const p = seqPanels[i];
+          if (p.classList.contains('panel-hidden')) continue;
+          if (isRobotPanel(p)) lastVisible = p;
         }
         const robot = seq.querySelector(':scope > .sequence-robot');
         if (!robot || !lastVisible) return;
