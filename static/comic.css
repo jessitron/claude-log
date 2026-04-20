@@ -100,6 +100,13 @@ body {
   position: relative;
 }
 
+/* Panel reveal: hidden top-level panels keep their layout footprint so
+   the full length of the comic is visible, but their contents don't
+   render. Arrow keys walk forward/back through the reveal sequence. */
+.comic-strip > .panel.panel-hidden {
+  visibility: hidden;
+}
+
 /* Source tag — hidden unless body.show-refs is set (debug mode toggle) */
 .source-tag {
   position: absolute;

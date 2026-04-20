@@ -220,6 +220,7 @@ export function generateHtml(
     <div class="comic-title">
       <h1>${escapeHtml(title)}</h1>
       <div class="toggle-bar">
+        <button id="reveal-all" class="toggle-btn" title="Reveal all panels">Reveal all</button>
         <button id="toggle-actions" class="toggle-btn">Show all actions</button>
         <button id="toggle-outputs" class="toggle-btn">Hide all outputs</button>
         <button id="toggle-refs" class="toggle-btn" title="Hotkey: r">Show refs <kbd>r</kbd></button>
@@ -264,6 +265,57 @@ ${panelHtml}
     hotkeyToggle('toggle-refs', 'show-refs', 'r', 'Show refs', 'Hide refs');
     hotkeyToggle('toggle-tokens', 'show-tokens', 't', 'Show tokens', 'Hide tokens');
     hotkeyToggle('toggle-queued', 'show-queued', 'q', 'Show queued', 'Hide queued');
+
+    // Panel reveal: the layout is fully laid out, but only the first
+    // top-level panel is visible on load. Right arrow reveals the next
+    // hidden panel and smooth-scrolls it into view if needed. Left arrow
+    // re-hides the most recently revealed panel. "Reveal all" shows
+    // everything at once.
+    (function panelReveal() {
+      const panels = Array.from(document.querySelectorAll('.comic-strip > .panel'));
+      if (panels.length === 0) return;
+      panels.forEach(function(el, i) {
+        if (i > 0) el.classList.add('panel-hidden');
+      });
+
+      function nextHiddenIndex() {
+        for (let i = 0; i < panels.length; i++) {
+          if (panels[i].classList.contains('panel-hidden')) return i;
+        }
+        return -1;
+      }
+      function lastVisibleIndex() {
+        for (let i = panels.length - 1; i > 0; i--) {
+          if (!panels[i].classList.contains('panel-hidden')) return i;
+        }
+        return -1;
+      }
+
+      function revealNext() {
+        const i = nextHiddenIndex();
+        if (i < 0) return;
+        const el = panels[i];
+        el.classList.remove('panel-hidden');
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      function hideLast() {
+        const i = lastVisibleIndex();
+        if (i < 0) return;
+        panels[i].classList.add('panel-hidden');
+      }
+      function revealAll() {
+        panels.forEach(function(el) { el.classList.remove('panel-hidden'); });
+      }
+
+      document.getElementById('reveal-all').addEventListener('click', revealAll);
+      document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (e.key === 'ArrowRight') { e.preventDefault(); revealNext(); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); hideLast(); }
+      });
+    })();
 
     document.addEventListener('click', function(e) {
       const tag = e.target.closest('.source-tag');
