@@ -13,30 +13,33 @@
 //   node scripts/show-ref.js episode-8-before:L40-45         # range notation
 //   node scripts/show-ref.js episode-8-before:L42 --full     # no filtering
 //   node scripts/show-ref.js episode-8-before:L42 --raw      # print the raw JSONL line
+//   node scripts/show-ref.js episode-8-before:L42 -f attachment         # only this field
+//   node scripts/show-ref.js episode-8-before:L42 -f +message.usage     # defaults + extras
 //
 // What "interesting" means: every JSONL record carries metadata we almost never
 // care about when Jessitron points at a panel (uuid chains, sessionId, cwd,
-// gitBranch, version, etc.). This script strips those by default and shows
-// type/message/attachment/toolUseResult/timestamp — the stuff that actually
-// tells you what happened. Use --full to see every key.
+// gitBranch, version, etc.). By default this script shows only a short list
+// of high-signal fields (type/timestamp/message.role/message.content/
+// toolUseResult/summary/isSidechain/isMeta). Use -f to pick your own set, or
+// --full to see every key.
 
 const fs = require("fs");
 const path = require("path");
 
-const NOISE_KEYS = new Set([
-  "uuid",
-  "parentUuid",
-  "sessionId",
-  "cwd",
-  "gitBranch",
-  "version",
-  "userType",
-  "entrypoint",
-  "promptId",
-  "requestId",
-  "messageId",          // on file-history-snapshot — same id appears nested
-  "permissionMode",     // usually not interesting when pointed at a panel
-]);
+// Default field paths to show per record. Dotted paths select nested keys.
+// Tuned for "Jessitron pointed at a panel; what happened here?" — keeps
+// output small enough that Claude Code won't truncate it mid-tool-result.
+const DEFAULT_FIELDS = [
+  "type",
+  "timestamp",
+  "summary",
+  "isSidechain",
+  "isMeta",
+  "message.role",
+  "message.content",
+  "toolUseResult",
+  "attachment",
+];
 
 function parseArgs(argv) {
   const opts = {
@@ -46,7 +49,9 @@ function parseArgs(argv) {
     after: 0,
     full: false,
     raw: false,
-    maxContent: 2000,   // truncate large string fields so output stays readable
+    fields: null,       // null = use DEFAULT_FIELDS
+    maxContent: 500,    // truncate large string fields so output stays readable
+    maxArray: 20,       // truncate large arrays too — addedNames etc. can be huge
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -60,10 +65,23 @@ function parseArgs(argv) {
       opts.full = true;
     } else if (a === "--raw") {
       opts.raw = true;
+    } else if (a === "-f" || a === "--fields") {
+      const spec = argv[++i];
+      if (!spec) throw new Error("--fields requires a value");
+      // Leading "+" means "default fields plus these".
+      if (spec.startsWith("+")) {
+        const extras = spec.slice(1).split(",").map((s) => s.trim()).filter(Boolean);
+        opts.fields = [...DEFAULT_FIELDS, ...extras];
+      } else {
+        opts.fields = spec.split(",").map((s) => s.trim()).filter(Boolean);
+      }
     } else if (a === "--max" || a === "--max-content") {
       opts.maxContent = parseInt(argv[++i], 10);
+    } else if (a === "--max-array") {
+      opts.maxArray = parseInt(argv[++i], 10);
     } else if (a === "--no-truncate") {
       opts.maxContent = Infinity;
+      opts.maxArray = Infinity;
     } else if (a === "-h" || a === "--help") {
       printHelp();
       process.exit(0);
@@ -96,10 +114,15 @@ Options:
   -c, --context N     show N extra lines before and after the ref
       --before N      show N extra lines before only
       --after N       show N extra lines after only
-      --full          include every key (skip the noise filter)
+  -f, --fields LIST   comma-separated field paths to include (dotted, e.g.
+                      message.content,message.usage). Prefix with "+" to add
+                      to the defaults: "-f +attachment,message.usage".
+                      Default: ${DEFAULT_FIELDS.join(",")}
+      --full          include every key (skip field filtering)
       --raw           print the raw JSONL line(s) verbatim
-      --max N         truncate string fields longer than N chars (default 2000)
-      --no-truncate   don't truncate string fields
+      --max N         truncate strings longer than N chars (default 500)
+      --max-array N   truncate arrays longer than N elements (default 20)
+      --no-truncate   don't truncate strings or arrays
   -h, --help          show this help
 `);
 }
@@ -182,33 +205,64 @@ function readLines(filePath, wanted) {
   return out;
 }
 
-function truncateStrings(value, max) {
-  if (max === Infinity) return value;
+function truncateValue(value, opts) {
   if (typeof value === "string") {
-    if (value.length > max) {
-      return value.slice(0, max) + `… [${value.length - max} more chars]`;
+    if (opts.maxContent !== Infinity && value.length > opts.maxContent) {
+      return value.slice(0, opts.maxContent)
+        + `… [${value.length - opts.maxContent} more chars]`;
     }
     return value;
   }
-  if (Array.isArray(value)) return value.map((v) => truncateStrings(v, max));
+  if (Array.isArray(value)) {
+    if (opts.maxArray !== Infinity && value.length > opts.maxArray) {
+      const kept = value.slice(0, opts.maxArray).map((v) => truncateValue(v, opts));
+      kept.push(`… [${value.length - opts.maxArray} more items]`);
+      return kept;
+    }
+    return value.map((v) => truncateValue(v, opts));
+  }
   if (value && typeof value === "object") {
     const out = {};
-    for (const [k, v] of Object.entries(value)) out[k] = truncateStrings(v, max);
+    for (const [k, v] of Object.entries(value)) out[k] = truncateValue(v, opts);
     return out;
   }
   return value;
 }
 
-function filterNoise(obj) {
+// Pick a subset of `obj` by dotted paths. "message.content" keeps only the
+// content subtree under message; "type" keeps the whole top-level type field.
+// Missing paths are silently skipped.
+function pickFields(obj, paths) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
   const out = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (NOISE_KEYS.has(k)) continue;
-    // isSidechain:false is default; only show if true
-    if (k === "isSidechain" && v === false) continue;
-    out[k] = v;
+  for (const p of paths) {
+    const segs = p.split(".");
+    const val = getPath(obj, segs);
+    if (val === undefined) continue;
+    // isSidechain/isMeta default to false; only surface them when true.
+    if ((p === "isSidechain" || p === "isMeta") && val === false) continue;
+    setPath(out, segs, val);
   }
   return out;
+}
+
+function getPath(obj, segs) {
+  let cur = obj;
+  for (const s of segs) {
+    if (cur == null || typeof cur !== "object" || Array.isArray(cur)) return undefined;
+    cur = cur[s];
+  }
+  return cur;
+}
+
+function setPath(obj, segs, val) {
+  let cur = obj;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const s = segs[i];
+    if (cur[s] == null || typeof cur[s] !== "object" || Array.isArray(cur[s])) cur[s] = {};
+    cur = cur[s];
+  }
+  cur[segs[segs.length - 1]] = val;
 }
 
 function formatRecord(lineNum, rawLine, opts, isContext) {
@@ -222,8 +276,9 @@ function formatRecord(lineNum, rawLine, opts, isContext) {
   } catch (err) {
     return `--- L${lineNum}${ctx} (unparseable) ---\n${rawLine}\n`;
   }
-  const filtered = opts.full ? parsed : filterNoise(parsed);
-  const truncated = truncateStrings(filtered, opts.maxContent);
+  const fields = opts.fields || DEFAULT_FIELDS;
+  const filtered = opts.full ? parsed : pickFields(parsed, fields);
+  const truncated = truncateValue(filtered, opts);
   const header = `--- L${lineNum}`
     + (parsed.type ? ` type=${parsed.type}` : "")
     + (parsed.isSidechain ? " sidechain" : "")
