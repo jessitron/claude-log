@@ -547,31 +547,35 @@ ${panelHtml}
 
       // Notifications with a known origin (the tool_use that spawned the
       // background task) fly in from that tool's DOM position instead of
-      // the default fixed-offset slide. We compute the delta while the
-      // notification is still .panel-hidden (its layout slot is reserved
-      // via visibility:hidden, so its rect is valid), disable the
-      // transform transition just long enough to set the starting point,
-      // then re-enable and drop the hidden class so the transition runs
-      // from origin → final.
+      // the default fixed-offset slide. We measure layout positions via
+      // the offsetTop/offsetLeft chain — getBoundingClientRect would
+      // include the .panel-hidden transform still on the element, which
+      // produces a feedback loop where every other reveal reads back the
+      // previous cycle's offset and the slide collapses to the default.
+      function layoutTop(node) {
+        let t = 0;
+        while (node) { t += node.offsetTop; node = node.offsetParent; }
+        return t;
+      }
+      function layoutLeft(node) {
+        let l = 0;
+        while (node) { l += node.offsetLeft; node = node.offsetParent; }
+        return l;
+      }
       function primeNotificationOrigin(el) {
         if (!el.classList.contains('notification')) return;
         const originId = el.getAttribute('data-origin-tool-use-id');
         if (!originId) return;
         const row = document.querySelector('li[data-tool-use-id="' + originId + '"]');
         const panel = document.querySelector('.action-montage[data-tool-use-ids~="' + originId + '"]');
-        // Prefer the row's rect when it's actually laid out (montage open);
-        // fall back to the containing montage panel otherwise.
+        // Prefer the row when it's actually laid out (montage open); fall
+        // back to the containing montage panel otherwise.
         let originEl = null;
-        if (row) {
-          const r = row.getBoundingClientRect();
-          if (r.width > 0 && r.height > 0) originEl = row;
-        }
+        if (row && row.offsetWidth > 0 && row.offsetHeight > 0) originEl = row;
         if (!originEl) originEl = panel;
         if (!originEl) return;
-        const from = originEl.getBoundingClientRect();
-        const to = el.getBoundingClientRect();
-        const dx = Math.round(from.left - to.left);
-        const dy = Math.round(from.top - to.top);
+        const dx = Math.round(layoutLeft(originEl) - layoutLeft(el));
+        const dy = Math.round(layoutTop(originEl) - layoutTop(el));
         el.style.transition = 'none';
         el.style.setProperty('--origin-dx', dx + 'px');
         el.style.setProperty('--origin-dy', dy + 'px');
