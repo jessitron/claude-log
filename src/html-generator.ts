@@ -112,7 +112,8 @@ function renderPanel(panel: Panel, index: number): string {
                 <pre class="tool-output">${escapeHtml(truncatedOutput)}</pre>
               </details>`;
         }
-        return `<li>${mainContent}${extras}</li>`;
+        const idAttr = d.toolUseId ? ` data-tool-use-id="${escapeHtml(d.toolUseId)}"` : "";
+        return `<li${idAttr}>${mainContent}${extras}</li>`;
       };
 
       // Prefer batch rendering. Fall back to flat toolDetails if batches
@@ -164,8 +165,13 @@ function renderPanel(panel: Panel, index: number): string {
         .join("\n          ");
 
       const summary = panel.lines.map((l) => escapeHtml(l)).join("  ");
+      const allToolIds = (panel.toolDetails || [])
+        .map((d) => d.toolUseId)
+        .filter((id): id is string => !!id)
+        .join(" ");
+      const idsAttr = allToolIds ? ` data-tool-use-ids="${escapeHtml(allToolIds)}"` : "";
       return `
-    <div class="panel action-montage" ${attrs}>
+    <div class="panel action-montage"${idsAttr} ${attrs}>
       ${tag}
       <details class="montage-burst">
         <summary class="montage-summary">${summary}</summary>
@@ -200,14 +206,18 @@ function renderPanel(panel: Panel, index: number): string {
     </div>`;
     }
 
-    case "notification":
+    case "notification": {
+      const originAttr = panel.originToolUseId
+        ? ` data-origin-tool-use-id="${escapeHtml(panel.originToolUseId)}"`
+        : "";
       return `
-    <div class="panel notification${q}" ${attrs}>
+    <div class="panel notification${q}"${originAttr} ${attrs}>
       ${tag}
       <div class="notification-box">
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
       </div>
     </div>`;
+    }
 
     case "narrator":
       return `
@@ -535,10 +545,46 @@ ${panelHtml}
         window.scrollBy({ top: delta, behavior: 'smooth' });
       }
 
+      // Notifications with a known origin (the tool_use that spawned the
+      // background task) fly in from that tool's DOM position instead of
+      // the default fixed-offset slide. We compute the delta while the
+      // notification is still .panel-hidden (its layout slot is reserved
+      // via visibility:hidden, so its rect is valid), disable the
+      // transform transition just long enough to set the starting point,
+      // then re-enable and drop the hidden class so the transition runs
+      // from origin → final.
+      function primeNotificationOrigin(el) {
+        if (!el.classList.contains('notification')) return;
+        const originId = el.getAttribute('data-origin-tool-use-id');
+        if (!originId) return;
+        const row = document.querySelector('li[data-tool-use-id="' + originId + '"]');
+        const panel = document.querySelector('.action-montage[data-tool-use-ids~="' + originId + '"]');
+        // Prefer the row's rect when it's actually laid out (montage open);
+        // fall back to the containing montage panel otherwise.
+        let originEl = null;
+        if (row) {
+          const r = row.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) originEl = row;
+        }
+        if (!originEl) originEl = panel;
+        if (!originEl) return;
+        const from = originEl.getBoundingClientRect();
+        const to = el.getBoundingClientRect();
+        const dx = Math.round(from.left - to.left);
+        const dy = Math.round(from.top - to.top);
+        el.style.transition = 'none';
+        el.style.setProperty('--origin-dx', dx + 'px');
+        el.style.setProperty('--origin-dy', dy + 'px');
+        // force reflow so the var change sticks before transitions resume
+        void el.offsetWidth;
+        el.style.transition = '';
+      }
+
       function revealNext() {
         const i = nextHiddenIndex();
         if (i < 0) return;
         const el = panels[i];
+        primeNotificationOrigin(el);
         el.classList.remove('panel-hidden');
         updateRobotsForPanel(el);
         scrollPanelIntoView(el, function() {
@@ -575,6 +621,28 @@ ${panelHtml}
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
         if (e.key === 'ArrowRight') { e.preventDefault(); revealNext(); }
         else if (e.key === 'ArrowLeft') { e.preventDefault(); hideLast(); }
+      });
+    })();
+
+    // Hover a notification → highlight the action-montage (and row, if open)
+    // that spawned the background task. Helps a reader confirm "this
+    // messenger came from *that* work."
+    (function notificationOriginHighlight() {
+      const notifs = document.querySelectorAll('.notification[data-origin-tool-use-id]');
+      notifs.forEach(function(notif) {
+        const id = notif.getAttribute('data-origin-tool-use-id');
+        if (!id) return;
+        const sel = '[data-tool-use-id="' + id + '"], .action-montage[data-tool-use-ids~="' + id + '"]';
+        function on() {
+          document.querySelectorAll(sel).forEach(function(t) { t.classList.add('highlight-origin'); });
+          notif.classList.add('is-hovering-origin');
+        }
+        function off() {
+          document.querySelectorAll(sel).forEach(function(t) { t.classList.remove('highlight-origin'); });
+          notif.classList.remove('is-hovering-origin');
+        }
+        notif.addEventListener('mouseenter', on);
+        notif.addEventListener('mouseleave', off);
       });
     })();
 

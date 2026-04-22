@@ -24,6 +24,7 @@ export interface ToolDetail {
   output?: string; // tool result output, if available
   subpanels?: Panel[]; // for Agent tools: the subagent's conversation as panels
   agentType?: string;  // e.g. "Explore"
+  toolUseId?: string;  // tool_use block id; used to link notifications back to their origin
 }
 
 // A group of tool calls emitted by one assistant message. Parallel calls from
@@ -47,6 +48,8 @@ export interface Panel {
   outputTokens?: number; // for assistant-text/think panels: output_tokens from usage
   queued?: boolean;      // rendered from an enqueue or mid-turn async injection;
                          // hidden by default, revealed via the 'q' toggle
+  originToolUseId?: string; // for notifications: the tool_use id of the Bash call
+                            // that spawned the background task reporting in
 }
 
 export interface ConversationTotals {
@@ -369,6 +372,7 @@ export function groupIntoPanels(
     lineNumber: number;
     messageId?: string;
     isPhantom?: boolean;
+    toolUseId?: string;
   }[] = [];
 
   // Notifications that arrive mid-montage get deferred until after the montage flushes
@@ -397,6 +401,7 @@ export function groupIntoPanels(
       output: t.output,
       subpanels: t.subpanels,
       agentType: t.agentType,
+      toolUseId: t.toolUseId,
     }));
 
     // Group consecutive tools by messageId. Tools with the same id were
@@ -488,10 +493,12 @@ export function groupIntoPanels(
       if (att?.type === "queued_command" && att?.commandMode === "task-notification" && typeof att.prompt === "string") {
         const summaryMatch = att.prompt.match(/<summary>(.*?)<\/summary>/s);
         if (summaryMatch) {
+          const originMatch = att.prompt.match(/<tool-use-id>(.*?)<\/tool-use-id>/s);
           const notif: Panel = {
             type: "notification",
             lines: [summaryMatch[1].trim()],
             lineNumbers: [record.lineNumber],
+            originToolUseId: originMatch?.[1].trim(),
           };
           if (pendingTools.length > 0) {
             deferredNotifications.push(notif);
@@ -510,10 +517,12 @@ export function groupIntoPanels(
       if (text.includes("<task-notification>")) {
         const summaryMatch = text.match(/<summary>(.*?)<\/summary>/s);
         if (summaryMatch) {
+          const originMatch = text.match(/<tool-use-id>(.*?)<\/tool-use-id>/s);
           const notif: Panel = {
             type: "notification",
             lines: [summaryMatch[1].trim()],
             lineNumbers: [record.lineNumber],
+            originToolUseId: originMatch?.[1].trim(),
           };
           // Defer until after montage flushes — notification arrived during work
           if (pendingTools.length > 0) {
@@ -704,6 +713,7 @@ export function groupIntoPanels(
             agentType,
             lineNumber: record.lineNumber,
             messageId: msgId,
+            toolUseId: toolId,
           });
         }
       }
