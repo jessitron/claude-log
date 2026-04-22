@@ -131,18 +131,30 @@ body {
 .notification {
   --origin-dx: 80px;
   --origin-dy: 0px;
+  /* Incoming: fade in fast (first ~150ms) so the box is visible near its
+     origin point while it's still sliding. The transform takes longer so
+     the reader can watch the arc. */
   transition:
-    transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 320ms ease-out,
+    transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 150ms ease-out,
     visibility 0s linear 0s;
 }
 .notification.panel-hidden {
   transform: translate(var(--origin-dx), var(--origin-dy));
   opacity: 0;
+  /* Outgoing: slide and fade together so it retreats cleanly to the origin. */
   transition:
     transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 320ms ease-out,
     visibility 0s linear 320ms;
+}
+
+/* Two-phase intermediate: notification is fully visible but still parked
+   at its originating action's position. The next arrow press removes
+   this class, and the base .notification transition slides it home. */
+.notification.notification-at-origin {
+  transform: translate(var(--origin-dx), var(--origin-dy));
+  opacity: 1;
 }
 
 /* Hovering a notification traces it back to the action that spawned it. */

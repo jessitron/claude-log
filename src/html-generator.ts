@@ -584,12 +584,29 @@ ${panelHtml}
         el.style.transition = '';
       }
 
+      // A notification with a known origin reveals in two arrow presses:
+      // (1) fade in at the originating action's position, (2) slide down
+      // to its final spot. Hiding runs in reverse. All other panels stay
+      // single-phase.
+      function hasTwoPhase(el) {
+        return el.classList.contains('notification') && el.hasAttribute('data-origin-tool-use-id');
+      }
+
       function revealNext() {
+        // Finish a pending two-phase reveal first — don't skip past a
+        // notification still parked at its origin.
+        for (let k = 0; k < panels.length; k++) {
+          if (panels[k].classList.contains('notification-at-origin')) {
+            panels[k].classList.remove('notification-at-origin');
+            return;
+          }
+        }
         const i = nextHiddenIndex();
         if (i < 0) return;
         const el = panels[i];
         primeNotificationOrigin(el);
         el.classList.remove('panel-hidden');
+        if (hasTwoPhase(el)) el.classList.add('notification-at-origin');
         updateRobotsForPanel(el);
         scrollPanelIntoView(el, function() {
           const entry = entryByPanel.get(el);
@@ -600,6 +617,17 @@ ${panelHtml}
         const i = lastVisibleIndex();
         if (i < 0) return;
         const el = panels[i];
+        // Two-phase reverse: fully revealed → at-origin → hidden.
+        if (el.classList.contains('notification-at-origin')) {
+          el.classList.remove('notification-at-origin');
+          el.classList.add('panel-hidden');
+          updateRobotsForPanel(el);
+          return;
+        }
+        if (hasTwoPhase(el)) {
+          el.classList.add('notification-at-origin');
+          return;
+        }
         el.classList.add('panel-hidden');
         updateRobotsForPanel(el);
         const entry = entryByPanel.get(el);
@@ -614,6 +642,7 @@ ${panelHtml}
           const entry = entryByPanel.get(el);
           if (entry) showEntryFully(entry);
           el.classList.remove('panel-hidden');
+          el.classList.remove('notification-at-origin');
         });
         sequences.forEach(updateSequenceRobot);
       }
