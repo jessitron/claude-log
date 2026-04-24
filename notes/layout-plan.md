@@ -21,9 +21,9 @@ The comic is **keyboard-driven**, not scroll-driven. On load only the first top-
 - **←** re-hides the most recently revealed panel.
 - **Reveal all** button in the toolbar fills in every panel at once (and shows speech bubbles fully-typed).
 
-Scroll happens *before* typing starts (we wait for `scrollend` with a 900ms timeout fallback), so the reader has arrived at the panel before the text streams in. For human-speech panels the scroll target also includes the absolutely-positioned avatar hanging below the bubble.
+Scroll happens _before_ typing starts (we wait for `scrollend` with a 900ms timeout fallback), so the reader has arrived at the panel before the text streams in. For human-speech panels the scroll target also includes the absolutely-positioned avatar hanging below the bubble.
 
-Top-level panels are the direct children of `.comic-strip` plus panels nested inside `.comic-strip > .robot-sequence > .sequence-panels`. Subagent sub-panels deeper in the tree are *not* part of the reveal flow.
+Top-level panels are the direct children of `.comic-strip` plus panels nested inside `.comic-strip > .robot-sequence > .sequence-panels`. Subagent sub-panels deeper in the tree are _not_ part of the reveal flow.
 
 ---
 
@@ -55,7 +55,7 @@ Contiguous robot-type panels are wrapped in a `<div class="robot-sequence">` at 
 
 ```html
 <div class="robot-sequence">
-  <img class="sequence-robot" src="robot.png">
+  <img class="sequence-robot" src="robot.png" />
   <div class="sequence-panels">
     <!-- claude-think / action-montage / spawn-agent / claude-speech,
          plus any notification panels that arrived mid-sequence -->
@@ -64,6 +64,7 @@ Contiguous robot-type panels are wrapped in a `<div class="robot-sequence">` at 
 ```
 
 **Grouping rules** (`groupForRendering` in `src/html-generator.ts`):
+
 - A sequence is a maximal run of robot-type panels.
 - A **claude-speech ends its sequence** — the next robot panel after it starts a fresh sequence with its own robot graphic.
 - **Notifications pass through**: they stay in the DOM where they appear but don't break the sequence. The robot's `translateY` only tracks robot-type panels, so notifications are skipped when picking "last visible panel."
@@ -76,15 +77,15 @@ Contiguous robot-type panels are wrapped in a `<div class="robot-sequence">` at 
 
 ## Transitions by Panel Type
 
-| Panel type       | Entrance                                            | Status |
-|------------------|-----------------------------------------------------|--------|
-| human-speech     | Typewriter, 60 chars/sec, bubble grows from left    | ✅ done |
-| claude-speech    | Typewriter, 180 chars/sec, bubble grows from left   | ✅ done |
-| claude-think     | Fade-in (opacity 0→1 over 400ms)                    | ✅ done |
-| action-montage   | None — appears instantly when revealed              | ❌ not yet |
-| spawn-agent      | None                                                | ❌ not yet |
-| notification     | None (the sequence carries it along)                | ❌ not yet |
-| narrator         | None                                                | ❌ not yet |
+| Panel type     | Entrance                                                                       | Status     |
+| -------------- | ------------------------------------------------------------------------------ | ---------- |
+| human-speech   | Typewriter, 60 chars/sec, bubble grows from left                               | ✅ done    |
+| claude-speech  | Typewriter, 180 chars/sec, bubble grows from left                              | ✅ done    |
+| claude-think   | Fade-in (opacity 0→1 over 400ms)                                               | ✅ done    |
+| action-montage | Conditional                                                                    | ❌ not yet |
+| spawn-agent    | Conditional                                                                    | ❌ not yet |
+| notification   | needs to slide in from left. Ideally, after dropping from its source tool call | ❌ not yet |
+| narrator       | None                                                                           | ❌ not yet |
 
 Plus: the robot itself animates its `translateY` whenever the last-revealed robot panel in its sequence changes (reveal or re-hide).
 
@@ -97,8 +98,9 @@ Separate from entrance transitions, the action-montage's own `<details>` expansi
 ## Known open items
 
 - **Action-montage entrance** — should have some reveal animation (the robot slides to it, but the box itself snaps in). Options: fade in, slide in from the right, or briefly flash the ⚡ACTION⚡ banner.
+  - I want some of these to come in open, and show what they're doing. but only some of them, so we'll need a way to provide that input.
 - **Spawn-agent entrance** — same.
-- **Notification entrance** — would benefit from a slide-in-from-right (200ms or so) to sell "a messenger arrived mid-flow." Especially important now that notifications live *inside* robot sequences.
-- **Narrator entrance** — fade-in would match think bubbles.
-- **Narrator passthrough** — should a narrator panel break the robot sequence, or pass through like notification? Probably passthrough for contextual narrators, break for scene-transition narrators. No way to distinguish from the parser yet.
+- **Notification entrance** — would benefit from a slide-in-from-right (200ms or so) to sell "a messenger arrived mid-flow." Especially important now that notifications live _inside_ robot sequences.
+  - ideally they originate at whatever tool call initiated the process that a "background command completed" came from.
+- **Narrator entrance** — these are rare enough that we don't need to worry about them yet. They could use some sort of violent entrance.
 - **Spacing between panels** — still uses the default gap of the containing flex column. The original plan had gap-by-context rules (tight think→action, looser action→speech, extra before notification). Not implemented.
