@@ -188,6 +188,7 @@ li[data-tool-use-id].highlight-origin {
   z-index: 10;
   cursor: pointer;
   user-select: none;
+  text-decoration: none;
   display: none;
 }
 

@@ -22,7 +22,9 @@ function sourceTag(panel: Panel): string {
   const file = panel.sourceFile || "";
   const ref = file ? `${file}:L${lines}` : `L${lines}`;
   const title = file ? `${file} line(s): ${lines}` : `JSONL line(s): ${lines}`;
-  return `<span class="source-tag" title="${escapeHtml(title)}">${escapeHtml(ref)}</span>`;
+  // Anchor to the ref so clicking navigates + fires hashchange; our JS
+  // handles the panel reveal and also copies the full URL to clipboard.
+  return `<a class="source-tag" href="#${escapeHtml(ref)}" title="${escapeHtml(title)}">${escapeHtml(ref)}</a>`;
 }
 
 function tokenBadge(inputTokens: number | undefined, outputTokens: number | undefined): string {
@@ -498,32 +500,37 @@ ${panelHtml}
         if (robot) requestAnimationFrame(function() { robot.style.transition = ''; });
       });
 
-      // Hash-driven fast-forward: if the URL's hash matches a panel's
-      // source-tag ref, reveal everything up through that panel with no
-      // typewriter animation and jump the viewport to it.
-      const initialRef = decodeURIComponent(window.location.hash.slice(1));
-      const initialIdx = findPanelIndexByRef(initialRef);
-      if (initialIdx > 0) {
-        for (let k = 0; k <= initialIdx; k++) {
-          const el = panels[k];
-          primeNotificationOrigin(el);
-          el.classList.remove('panel-hidden');
-          el.classList.remove('notification-at-origin');
-          const entry = entryByPanel.get(el);
-          if (entry) showEntryFully(entry);
+      // Hash-driven navigation: the URL hash is the source-tag ref of the
+      // last-revealed panel. On load, match the hash to a panel and
+      // fast-forward to it; on hashchange (from a source-tag click or
+      // back/forward), reveal or hide panels to match.
+      function applyHash() {
+        const ref = decodeURIComponent(window.location.hash.slice(1));
+        if (!ref) {
+          setRevealedUpTo(0);
+          return;
         }
-        sequences.forEach(updateSequenceRobot);
+        const idx = findPanelIndexByRef(ref);
+        if (idx < 0) {
+          console.warn('[comic] no panel matches hash ref:', ref);
+          return;
+        }
+        setRevealedUpTo(idx);
         requestAnimationFrame(function() {
-          panels[initialIdx].scrollIntoView({ block: 'center', behavior: 'instant' });
+          panels[idx].scrollIntoView({ block: 'center' });
         });
+      }
+
+      const initialRef = decodeURIComponent(window.location.hash.slice(1));
+      if (initialRef) {
+        applyHash();
       } else {
-        if (initialRef && initialIdx < 0) {
-          console.warn('[comic] no panel matches hash ref:', initialRef);
-        }
         // Normal start: type out the first panel if it's a Claude speech.
         const firstEntry = entryByPanel.get(panels[0]);
         if (firstEntry) typeEntry(firstEntry);
       }
+
+      window.addEventListener('hashchange', applyHash);
 
       function nextHiddenIndex() {
         for (let i = 0; i < panels.length; i++) {
@@ -566,6 +573,29 @@ ${panelHtml}
         const ref = i > 0 ? panelRef(panels[i]) : '';
         const newUrl = window.location.pathname + window.location.search + (ref ? '#' + ref : '');
         history.replaceState(null, '', newUrl);
+      }
+      // Reveal panels 0..idx fully (no typewriter); hide panels idx+1..end
+      // and clear their typewriter state so they re-type if re-revealed.
+      function setRevealedUpTo(idx) {
+        for (let k = 0; k < panels.length; k++) {
+          const el = panels[k];
+          const entry = entryByPanel.get(el);
+          if (k <= idx) {
+            primeNotificationOrigin(el);
+            el.classList.remove('panel-hidden');
+            el.classList.remove('notification-at-origin');
+            if (entry) showEntryFully(entry);
+          } else {
+            el.classList.add('panel-hidden');
+            el.classList.remove('notification-at-origin');
+            if (entry) {
+              entry.aborted = true;
+              entry.nodes.forEach(function(n) { n.nodeValue = ''; });
+              entry.typed = false;
+            }
+          }
+        }
+        sequences.forEach(updateSequenceRobot);
       }
 
       function scrollPanelIntoView(el, onDone) {
@@ -736,15 +766,19 @@ ${panelHtml}
       });
     })();
 
+    // Clicking a source-tag <a> navigates to its #ref (triggering the
+    // reveal via hashchange) AND copies the full URL to the clipboard so
+    // you can paste a direct link to that panel. Modifier clicks
+    // (cmd/ctrl/middle) fall through to default "open in new tab" etc.
     document.addEventListener('click', function(e) {
       const tag = e.target.closest('.source-tag');
       if (!tag) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const text = tag.textContent;
-      navigator.clipboard.writeText(text).then(function() {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      const href = tag.getAttribute('href') || '';
+      const full = window.location.origin + window.location.pathname + window.location.search + href;
+      navigator.clipboard.writeText(full).then(function() {
         const original = tag.textContent;
-        tag.textContent = 'copied!';
+        tag.textContent = 'copied link!';
         tag.classList.add('copied');
         setTimeout(function() {
           tag.textContent = original;
