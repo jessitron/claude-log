@@ -651,10 +651,15 @@ ${panelHtml}
         if (!originId) return;
         const row = document.querySelector('li[data-tool-use-id="' + originId + '"]');
         const panel = document.querySelector('.action-montage[data-tool-use-ids~="' + originId + '"]');
-        // Prefer the row when it's actually laid out (montage open); fall
-        // back to the containing montage panel otherwise.
+        // Prefer the row only when its enclosing <details> is actually
+        // open — offsetWidth/Height stay non-zero on a clipped collapsed
+        // <details>, so that check alone would anchor to an invisible
+        // row indented by the <ul>'s padding.
         let originEl = null;
-        if (row && row.offsetWidth > 0 && row.offsetHeight > 0) originEl = row;
+        if (row) {
+          const details = row.closest('details');
+          if (details && details.open) originEl = row;
+        }
         if (!originEl) originEl = panel;
         if (!originEl) return;
         const dx = Math.round(layoutLeft(originEl) - layoutLeft(el));
