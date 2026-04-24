@@ -498,9 +498,32 @@ ${panelHtml}
         if (robot) requestAnimationFrame(function() { robot.style.transition = ''; });
       });
 
-      // If the first panel happens to be a Claude speech, start typing it.
-      const firstEntry = entryByPanel.get(panels[0]);
-      if (firstEntry) typeEntry(firstEntry);
+      // Hash-driven fast-forward: if the URL's hash matches a panel's
+      // source-tag ref, reveal everything up through that panel with no
+      // typewriter animation and jump the viewport to it.
+      const initialRef = decodeURIComponent(window.location.hash.slice(1));
+      const initialIdx = findPanelIndexByRef(initialRef);
+      if (initialIdx > 0) {
+        for (let k = 0; k <= initialIdx; k++) {
+          const el = panels[k];
+          primeNotificationOrigin(el);
+          el.classList.remove('panel-hidden');
+          el.classList.remove('notification-at-origin');
+          const entry = entryByPanel.get(el);
+          if (entry) showEntryFully(entry);
+        }
+        sequences.forEach(updateSequenceRobot);
+        requestAnimationFrame(function() {
+          panels[initialIdx].scrollIntoView({ block: 'center', behavior: 'instant' });
+        });
+      } else {
+        if (initialRef && initialIdx < 0) {
+          console.warn('[comic] no panel matches hash ref:', initialRef);
+        }
+        // Normal start: type out the first panel if it's a Claude speech.
+        const firstEntry = entryByPanel.get(panels[0]);
+        if (firstEntry) typeEntry(firstEntry);
+      }
 
       function nextHiddenIndex() {
         for (let i = 0; i < panels.length; i++) {
@@ -513,6 +536,36 @@ ${panelHtml}
           if (!panels[i].classList.contains('panel-hidden')) return i;
         }
         return -1;
+      }
+
+      // The URL hash mirrors the source-tag ref shown on each panel
+      // (e.g. #episode-8-before:L42). On load we fast-forward the reveal
+      // state to that panel; every reveal/hide rewrites the hash via
+      // replaceState so the current URL is always shareable without
+      // polluting back-button history.
+      function panelRef(el) {
+        const file = el.getAttribute('data-source-file') || '';
+        const lines = el.getAttribute('data-source-lines') || '';
+        return (file ? file + ':L' : 'L') + lines;
+      }
+      function findPanelIndexByRef(ref) {
+        if (!ref) return -1;
+        for (let i = 0; i < panels.length; i++) {
+          if (panelRef(panels[i]) === ref) return i;
+        }
+        return -1;
+      }
+      function lastRevealedIndex() {
+        for (let i = panels.length - 1; i >= 0; i--) {
+          if (!panels[i].classList.contains('panel-hidden')) return i;
+        }
+        return -1;
+      }
+      function syncHashToState() {
+        const i = lastRevealedIndex();
+        const ref = i > 0 ? panelRef(panels[i]) : '';
+        const newUrl = window.location.pathname + window.location.search + (ref ? '#' + ref : '');
+        history.replaceState(null, '', newUrl);
       }
 
       function scrollPanelIntoView(el, onDone) {
@@ -608,6 +661,7 @@ ${panelHtml}
         el.classList.remove('panel-hidden');
         if (hasTwoPhase(el)) el.classList.add('notification-at-origin');
         updateRobotsForPanel(el);
+        syncHashToState();
         scrollPanelIntoView(el, function() {
           const entry = entryByPanel.get(el);
           if (entry) typeEntry(entry);
@@ -622,6 +676,7 @@ ${panelHtml}
           el.classList.remove('notification-at-origin');
           el.classList.add('panel-hidden');
           updateRobotsForPanel(el);
+          syncHashToState();
           return;
         }
         if (hasTwoPhase(el)) {
@@ -636,6 +691,7 @@ ${panelHtml}
           entry.nodes.forEach(function(n) { n.nodeValue = ''; });
           entry.typed = false;
         }
+        syncHashToState();
       }
       function revealAll() {
         panels.forEach(function(el) {
@@ -645,6 +701,7 @@ ${panelHtml}
           el.classList.remove('notification-at-origin');
         });
         sequences.forEach(updateSequenceRobot);
+        syncHashToState();
       }
 
       document.getElementById('reveal-all').addEventListener('click', revealAll);
