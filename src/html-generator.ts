@@ -660,7 +660,13 @@ ${panelHtml}
           const details = row.closest('details');
           if (details && details.open) originEl = row;
         }
-        if (!originEl) originEl = panel;
+        // For a closed montage, anchor on the visible .montage-burst (the
+        // red-bordered box) rather than the surrounding panel — the panel's
+        // 8px top/bottom padding makes its border-top sit a few pixels
+        // above what the reader perceives as "the action panel".
+        if (!originEl && panel) {
+          originEl = panel.querySelector('.montage-burst') || panel;
+        }
         if (!originEl) return;
         const dx = Math.round(layoutLeft(originEl) - layoutLeft(el));
         const dy = Math.round(layoutTop(originEl) - layoutTop(el));
