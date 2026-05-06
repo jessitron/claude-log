@@ -10,9 +10,10 @@ echo "Building..."
 npx tsc
 
 shopt -s nullglob
-jsonls=(example/*.jsonl)
+# secret_examples/ is gitignored and absent in CI, so nullglob makes it a no-op there.
+jsonls=(example/*.jsonl secret_examples/*.jsonl)
 if [ ${#jsonls[@]} -eq 0 ]; then
-  echo "No .jsonl files found in example/"
+  echo "No .jsonl files found in example/ or secret_examples/"
   exit 1
 fi
 

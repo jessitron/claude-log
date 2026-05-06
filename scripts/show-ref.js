@@ -152,12 +152,15 @@ function parseRef(ref) {
 }
 
 // The panel sourceFile is a JSONL basename — could be a top-level example, a
-// subagent, or a nested subagent. Walk example/ to find it.
+// subagent, or a nested subagent. Walk example/ and secret_examples/ to find it.
 function findJsonl(base) {
-  const root = path.join(__dirname, "..", "example");
+  const roots = [
+    path.join(__dirname, "..", "example"),
+    path.join(__dirname, "..", "secret_examples"),
+  ];
   const target = base + ".jsonl";
   const matches = [];
-  const stack = [root];
+  const stack = [...roots];
   while (stack.length) {
     const dir = stack.pop();
     let entries;
