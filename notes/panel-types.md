@@ -40,7 +40,12 @@ All notifications are marked `queued: true` (hidden by default; `q` toggle revea
 ## 📜 Narrator (`narrator`)
 **What:** System events worth noting — API errors, etc.
 **Visual:** Centered burgundy box, italic text.
-**Source:** `system` records with `subtype=api_error` or short content strings. Skips boring subtypes like `turn_duration` and `stop_hook_summary`.
+**Source:** `system` records with `subtype=api_error` or any non-empty content string (other than the recap subtype, which gets its own panel). Skips boring subtypes like `turn_duration` and `stop_hook_summary`.
+
+## 📝 Recap (`recap`)
+**What:** Claude Code's "away_summary" — a short recap injected when the user comes back after being away. Encourages disabling via `/config`.
+**Visual:** Centered amber dashed box with a small "recap" label.
+**Source:** `system` records with `subtype=away_summary`. Content rendered in full (no truncation).
 
 ---
 

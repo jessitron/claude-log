@@ -77,3 +77,18 @@ Added `./dev` (→ `scripts/dev-server.js`) using browser-sync so CSS edits appl
 ### Files touched
 - `src/html-generator.ts` — added `open` to `<details class="tool-output-details">`, emptied the summary text (CSS renders `[−]` / `[+] output` via pseudo-elements), flipped the outputs-toggle default, `makeToggle` takes `initialExpanded`
 - `static/comic.css` — `.tool-output-details` positioned relative; summary styled differently for `[open]` vs `:not([open])` via `::before` content
+
+## 2026-05-05: Recap panel + system content de-truncation
+
+### What changed
+- New `recap` panel type for `system` records with `subtype=away_summary` — Claude Code's "you've been away, here's what happened" recap that ends with "(disable recaps in /config)". Rendered as a centered amber dashed box with a tiny "recap" label.
+- Removed the 200-char truncation on system narrator content. Also dropped the `< 500` length filter in `isInterestingSystem` — any non-empty string content qualifies now. The truncation was making narrators end in `…` mysteriously even though the source record was complete.
+
+### Why
+Jessitron noticed `netflix-traces:L30` rendered with a trailing ellipsis but the underlying record didn't end that way — it was our `truncate(content, 200)` cutting it off. No good reason for the limit; system content is short by nature.
+
+### Files touched
+- `src/panels.ts` — added `recap` to `PanelType`, branched on `subtype === "away_summary"` in the system handler, dropped truncate, dropped length filter
+- `src/html-generator.ts` — added `case "recap"` rendering with `.recap-box` and a `.recap-label`
+- `static/comic.css` — `.recap` styles (amber/dashed)
+- `notes/panel-types.md` — documented the new panel type, updated narrator description
