@@ -515,7 +515,12 @@ ${panelHtml}
           console.warn('[comic] no panel matches hash ref:', ref);
           return;
         }
-        setRevealedUpTo(idx);
+        // Only fast-forward if the target isn't already revealed. Otherwise
+        // clicking a source-tag on a mid-conversation panel would hide every
+        // later panel the user had already revealed (e.g. via "Reveal All").
+        if (panels[idx].classList.contains('panel-hidden')) {
+          setRevealedUpTo(idx);
+        }
         requestAnimationFrame(function() {
           panels[idx].scrollIntoView({ block: 'center' });
         });
