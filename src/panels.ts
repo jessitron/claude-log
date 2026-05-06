@@ -111,64 +111,99 @@ function extractTokenUsage(record: ConversationRecord): {
   };
 }
 
-// Which content types each assistant message actually contained. A message
-// is "hidden-thinking-only" when its sole block is an empty `thinking` (the
-// signature-only round-trip case) — no visible thinking, no text, no
-// tool_use. Those turns fold into the surrounding montage as phantom ↻s
-// instead of producing their own "…" panel.
-function buildMessageContentIndex(
+// One assistant message = one API call = one billed turn. Pass 1 collapses
+// each message's records into a single MessagePlan that says what panels
+// the message produces and where its tokens land. Pass 2 (the emission
+// loop) consults the plan instead of reconstructing these decisions from
+// loop state — so merge rules, token attribution, and phantom handling
+// live in one place.
+//
+// tokenOwner values:
+//   "think"       — the message's think panel carries the badge
+//                   (any visible thinking; hidden thinking merges in)
+//   "speech"      — the message's speech panel carries the badge
+//                   (text without visible thinking; any hidden thinking
+//                    becomes a separate "…" panel without a badge)
+//   "tools"       — the message has only tool_use (and maybe hidden
+//                   thinking); the montage batch carries the badge
+//   "hidden-only" — turn has nothing but hidden thinking; pass 2 decides
+//                   phantom-in-montage vs. standalone "…" panel based on
+//                   sequence state. Either way, this message's badge
+//                   rides on whatever it produces.
+export interface MessagePlan {
+  messageId: string;
+  hasVisibleThinking: boolean;
+  hasText: boolean;
+  hasToolUse: boolean;
+  hasHidden: boolean;
+  tokenOwner: "think" | "speech" | "tools" | "hidden-only";
+  usage: { totalInputTokens?: number; outputTokens?: number };
+}
+
+function buildMessagePlans(
   records: ConversationRecord[]
-): Map<string, { hasVisibleThinking: boolean; hasText: boolean; hasToolUse: boolean }> {
-  const index = new Map<string, { hasVisibleThinking: boolean; hasText: boolean; hasToolUse: boolean }>();
+): Map<string, MessagePlan> {
+  type Acc = {
+    hasVisibleThinking: boolean;
+    hasText: boolean;
+    hasToolUse: boolean;
+    hasHidden: boolean;
+    usage: { totalInputTokens?: number; outputTokens?: number };
+  };
+  const acc = new Map<string, Acc>();
   for (const r of records) {
     if (r.type !== "assistant") continue;
     const msg = r.raw.message as { id?: string; content?: ContentBlock[] } | undefined;
     const id = msg?.id;
     if (!id) continue;
-    const entry = index.get(id) ?? { hasVisibleThinking: false, hasText: false, hasToolUse: false };
+    const entry =
+      acc.get(id) ??
+      {
+        hasVisibleThinking: false,
+        hasText: false,
+        hasToolUse: false,
+        hasHidden: false,
+        usage: {},
+      };
     const blocks = Array.isArray(msg?.content) ? msg!.content : [];
     for (const b of blocks) {
-      if (b.type === "thinking" && ((b as any).thinking || "").trim()) entry.hasVisibleThinking = true;
+      if (b.type === "thinking") {
+        const t = ((b as any).thinking || "").trim();
+        if (t) entry.hasVisibleThinking = true;
+        else entry.hasHidden = true;
+      }
       if (b.type === "text" && ((b as any).text || "").trim()) entry.hasText = true;
       if (b.type === "tool_use") entry.hasToolUse = true;
     }
-    index.set(id, entry);
+    // Streaming records snapshot output_tokens as they grow — keep the max.
+    const u = extractTokenUsage(r);
+    entry.usage = {
+      totalInputTokens:
+        Math.max(entry.usage.totalInputTokens ?? 0, u.totalInputTokens ?? 0) || undefined,
+      outputTokens:
+        Math.max(entry.usage.outputTokens ?? 0, u.outputTokens ?? 0) || undefined,
+    };
+    acc.set(id, entry);
   }
-  return index;
-}
 
-// One assistant message = one API call = one set of billed tokens. A message
-// usually spans several JSONL records (one per content block), and streaming
-// snapshots of output_tokens GROW toward the final total — so the last record
-// of each message carries the truth. This index captures that per-message,
-// letting panels show correct token counts instead of mid-stream snapshots.
-function buildMessageUsageIndex(
-  records: ConversationRecord[]
-): Map<string, { totalInputTokens?: number; outputTokens?: number }> {
-  const index = new Map<string, { totalInputTokens?: number; outputTokens?: number }>();
-  for (const r of records) {
-    if (r.type !== "assistant") continue;
-    const msg = r.raw.message as { id?: string } | undefined;
-    const id = msg?.id;
-    if (!id) continue;
-    const usage = extractTokenUsage(r);
-    const existing = index.get(id);
-    if (!existing) {
-      index.set(id, usage);
-    } else {
-      index.set(id, {
-        totalInputTokens: Math.max(
-          existing.totalInputTokens ?? 0,
-          usage.totalInputTokens ?? 0
-        ) || undefined,
-        outputTokens: Math.max(
-          existing.outputTokens ?? 0,
-          usage.outputTokens ?? 0
-        ) || undefined,
-      });
-    }
+  const plans = new Map<string, MessagePlan>();
+  for (const [id, e] of acc) {
+    let tokenOwner: MessagePlan["tokenOwner"];
+    if (e.hasVisibleThinking) tokenOwner = "think";
+    else if (e.hasText) tokenOwner = "speech";
+    else if (e.hasToolUse) tokenOwner = "tools";
+    else tokenOwner = "hidden-only";
+    plans.set(id, {
+      messageId: id,
+      hasVisibleThinking: e.hasVisibleThinking,
+      hasText: e.hasText,
+      hasToolUse: e.hasToolUse,
+      hasHidden: e.hasHidden,
+      tokenOwner,
+      usage: e.usage,
+    });
   }
-  return index;
+  return plans;
 }
 
 // Records we skip entirely — they're noise for a comic
@@ -335,24 +370,30 @@ export function groupIntoPanels(
   const panels: Panel[] = [];
   const toolResults = buildToolResultIndex(records);
   const agentIndex = buildAgentIndex(records);
-  const messageUsage = buildMessageUsageIndex(records);
-  const messageContent = buildMessageContentIndex(records);
+  const plans = buildMessagePlans(records);
 
   // Filter to just the records we care about, so index-based look-ahead is clean.
   const visible = records.filter((r) => !isSkippable(r));
 
-  // Track which messages already have a thinking/text panel so the matching
-  // tool batch doesn't double-show tokens. Each API call's tokens should
-  // appear exactly once in the comic — on the thought/speech bubble when
-  // the call produced one, else on the round-trip divider that starts the
-  // call's tool batch.
-  const messagesWithThoughtPanel = new Set<string>();
-
-  // The last thinking/text panel we emitted, tracked so that consecutive
-  // same-message blocks (thinking → text, or thinking → thinking) merge
-  // into one panel instead of producing separate thought bubbles for the
-  // same API call.
-  let pendingThoughtPanel: { panel: Panel; messageId: string } | null = null;
+  // Per-message panel handles. Reset whenever the messageId changes. Lets
+  // multiple records from one assistant message (one thinking record + one
+  // text record, say) extend the same panel without a global "what panel
+  // did I last emit" switch.
+  let currentMessageId: string | undefined;
+  let currentThinkPanel: Panel | null = null;
+  let currentSpeechPanel: Panel | null = null;
+  const enterMessage = (id: string | undefined) => {
+    if (id !== currentMessageId) {
+      currentMessageId = id;
+      currentThinkPanel = null;
+      currentSpeechPanel = null;
+    }
+  };
+  const leaveMessage = () => {
+    currentMessageId = undefined;
+    currentThinkPanel = null;
+    currentSpeechPanel = null;
+  };
 
   // We accumulate tool_use blocks into an action montage.
   // When we hit something that isn't a tool_use, we flush the montage.
@@ -416,23 +457,22 @@ export function groupIntoPanels(
     let realIdx = 0;
     for (let b = 0; b < pendingTools.length; b++) {
       const t = pendingTools[b];
+      const plan = t.messageId ? plans.get(t.messageId) : undefined;
       if (t.isPhantom) {
-        const usage = t.messageId ? messageUsage.get(t.messageId) : undefined;
         batches.push({
           tools: [],
-          totalInputTokens: usage?.totalInputTokens,
-          outputTokens: usage?.outputTokens,
+          totalInputTokens: plan?.usage.totalInputTokens,
+          outputTokens: plan?.usage.outputTokens,
         });
         currentId = t.messageId;
         continue;
       }
       if (batches.length === 0 || batches[batches.length - 1].tools.length === 0 || t.messageId !== currentId) {
-        const ownsTokens = !!t.messageId && !messagesWithThoughtPanel.has(t.messageId);
-        const usage = t.messageId ? messageUsage.get(t.messageId) : undefined;
+        const ownsTokens = plan?.tokenOwner === "tools";
         batches.push({
           tools: [toolDetails[realIdx]],
-          totalInputTokens: ownsTokens ? usage?.totalInputTokens : undefined,
-          outputTokens: ownsTokens ? usage?.outputTokens : undefined,
+          totalInputTokens: ownsTokens ? plan?.usage.totalInputTokens : undefined,
+          outputTokens: ownsTokens ? plan?.usage.outputTokens : undefined,
         });
         currentId = t.messageId;
       } else {
@@ -556,28 +596,42 @@ export function groupIntoPanels(
 
       const msg = record.raw.message as { id?: string } | undefined;
       const msgId = msg?.id;
-
-      // Consecutive same-message thinking/text blocks merge into one panel:
-      // they're one API call, one billed turn, so one bubble.
-      if (pendingThoughtPanel && pendingThoughtPanel.messageId !== msgId) {
-        pendingThoughtPanel = null;
-      }
+      const plan = msgId ? plans.get(msgId) : undefined;
+      enterMessage(msgId);
 
       if (block.type === "text") {
         const text = (block as any).text || "";
         if (!text.trim()) continue;
 
-        if (pendingThoughtPanel) {
-          const lines = pendingThoughtPanel.panel.lines;
-          // If the previous line is a hidden-thinking placeholder, inline
-          // the text after it so the bubble reads "… text" on one line
-          // instead of splitting over two paragraphs.
+        // If this message also has visible thinking, all its text rides on
+        // the think panel (current behavior preserved). The think record
+        // typically arrives first, but if text comes first we still create
+        // the think panel here so subsequent thinking blocks merge in.
+        if (plan?.hasVisibleThinking) {
+          if (!currentThinkPanel) {
+            flushMontage();
+            currentThinkPanel = {
+              type: "claude-think",
+              lines: [],
+              lineNumbers: [],
+              ...(plan.tokenOwner === "think" ? plan.usage : {}),
+            };
+            panels.push(currentThinkPanel);
+          }
+          const lines = currentThinkPanel.lines;
           if (lines.length > 0 && lines[lines.length - 1] === "…") {
             lines[lines.length - 1] = "… " + text.trim();
           } else {
             lines.push(text.trim());
           }
-          pendingThoughtPanel.panel.lineNumbers.push(record.lineNumber);
+          currentThinkPanel.lineNumbers.push(record.lineNumber);
+          continue;
+        }
+
+        // Subsequent text record from the same message extends the same speech panel.
+        if (currentSpeechPanel) {
+          currentSpeechPanel.lines.push(text);
+          currentSpeechPanel.lineNumbers.push(record.lineNumber);
           continue;
         }
 
@@ -591,18 +645,14 @@ export function groupIntoPanels(
 
         flushMontage();
         const type = isShort && followedByTool ? "claude-think" : "claude-speech";
-        const usage = msgId ? messageUsage.get(msgId) ?? {} : {};
-        const panel: Panel = {
+        const tokens = plan?.tokenOwner === "speech" ? plan.usage : {};
+        currentSpeechPanel = {
           type,
           lines: [type === "claude-think" ? text.trim() : text],
           lineNumbers: [record.lineNumber],
-          ...usage,
+          ...tokens,
         };
-        panels.push(panel);
-        if (msgId) {
-          pendingThoughtPanel = { panel, messageId: msgId };
-          messagesWithThoughtPanel.add(msgId);
-        }
+        panels.push(currentSpeechPanel);
       } else if (block.type === "thinking") {
         // Omitted thinking (default on Opus 4.7): the `thinking` field is
         // empty but a `signature` is present. The model really thought;
@@ -611,71 +661,99 @@ export function groupIntoPanels(
         const isHidden = !thinking.trim();
         const visibleLine = isHidden ? "…" : truncate(thinking, 300);
 
-        if (pendingThoughtPanel) {
-          pendingThoughtPanel.panel.lines.push(visibleLine);
-          pendingThoughtPanel.panel.lineNumbers.push(record.lineNumber);
+        // Case 1: message has visible thinking somewhere. All thinking
+        // (visible + hidden) merges into one think panel.
+        if (plan?.hasVisibleThinking) {
+          if (!currentThinkPanel) {
+            flushMontage();
+            currentThinkPanel = {
+              type: "claude-think",
+              lines: [visibleLine],
+              lineNumbers: [record.lineNumber],
+              ...(plan.tokenOwner === "think" ? plan.usage : {}),
+            };
+            panels.push(currentThinkPanel);
+          } else {
+            currentThinkPanel.lines.push(visibleLine);
+            currentThinkPanel.lineNumbers.push(record.lineNumber);
+          }
           continue;
         }
 
-        if (isHidden && msgId) {
-          const content = messageContent.get(msgId);
-          // Hidden thinking in a turn that also has tool_uses: the batch
-          // already represents this turn and carries its tokens. Skip the
-          // "…" bubble entirely and don't flush — let the tool_use extend
-          // the current montage.
-          if (content && !content.hasText && !content.hasVisibleThinking && content.hasToolUse) {
+        // Case 2: hidden thinking on a message with text but no visible
+        // thinking. Standalone "…" bubble without tokens; the text panel
+        // will own the badge. (Checked before the hasToolUse case: if the
+        // message also has tool_use, we still want the standalone "…".)
+        if (isHidden && plan?.hasText) {
+          if (currentThinkPanel) {
+            currentThinkPanel.lines.push("…");
+            currentThinkPanel.lineNumbers.push(record.lineNumber);
             continue;
           }
-          // Thinking-only turn (no text, no tools) between tool batches:
-          // fold as a phantom ↻ inside the montage.
-          const isThinkingOnlyTurn = content
-            && !content.hasVisibleThinking
-            && !content.hasText
-            && !content.hasToolUse;
-          if (isThinkingOnlyTurn && pendingTools.length > 0) {
-            let nextIsToolUse = false;
-            for (let j = i + 1; j < visible.length; j++) {
-              const next = visible[j];
-              if (next.type === "assistant") {
-                const nextMsg = next.raw.message as { id?: string } | undefined;
-                if (nextMsg?.id === msgId) continue;
-                nextIsToolUse = assistantBlockType(next) === "tool_use";
-                break;
-              }
-              break;
-            }
-            if (nextIsToolUse) {
-              pendingTools.push({
-                name: "__phantom_thinking__",
-                summary: "",
-                lineNumber: record.lineNumber,
-                messageId: msgId,
-                isPhantom: true,
-              });
-              continue;
-            }
-          }
+          flushMontage();
+          currentThinkPanel = {
+            type: "claude-think",
+            lines: ["…"],
+            lineNumbers: [record.lineNumber],
+          };
+          panels.push(currentThinkPanel);
+          continue;
         }
 
+        // Case 3: hidden thinking on a message that also has tool_use
+        // (and no text, since that was Case 2). The tools own the tokens;
+        // suppress the bubble and don't flush — the upcoming tool_use
+        // should extend the current montage.
+        if (isHidden && plan?.hasToolUse) {
+          continue;
+        }
+
+        // Case 4: hidden-only turn (no text, no visible thinking, no
+        // tools). Becomes either a phantom ↻ inside the current montage
+        // (when wedged between tool batches) or a standalone "…" panel.
+        if (isHidden && plan?.tokenOwner === "hidden-only") {
+          let nextIsToolUse = false;
+          for (let j = i + 1; j < visible.length; j++) {
+            const next = visible[j];
+            if (next.type === "assistant") {
+              const nextMsg = next.raw.message as { id?: string } | undefined;
+              if (nextMsg?.id === msgId) continue;
+              nextIsToolUse = assistantBlockType(next) === "tool_use";
+              break;
+            }
+            break;
+          }
+          if (pendingTools.length > 0 && nextIsToolUse) {
+            pendingTools.push({
+              name: "__phantom_thinking__",
+              summary: "",
+              lineNumber: record.lineNumber,
+              messageId: msgId,
+              isPhantom: true,
+            });
+            continue;
+          }
+          flushMontage();
+          currentThinkPanel = {
+            type: "claude-think",
+            lines: [visibleLine],
+            lineNumbers: [record.lineNumber],
+            ...(plan?.usage ?? {}),
+          };
+          panels.push(currentThinkPanel);
+          continue;
+        }
+
+        // Fallback: visible thinking on a message that somehow doesn't
+        // have hasVisibleThinking set (shouldn't happen in practice).
         flushMontage();
-        // If this hidden-thinking turn also has visible text, the upcoming
-        // text panel will own the usage badge — emit a standalone "…"
-        // thought bubble (no usage, not pending) so the speech that
-        // follows stands on its own panel.
-        const content = msgId ? messageContent.get(msgId) : undefined;
-        const standaloneHiddenThink = isHidden && !!content && content.hasText;
-        const usage = msgId && !standaloneHiddenThink ? messageUsage.get(msgId) ?? {} : {};
-        const panel: Panel = {
+        currentThinkPanel = {
           type: "claude-think",
           lines: [visibleLine],
           lineNumbers: [record.lineNumber],
-          ...usage,
+          ...(plan?.usage ?? {}),
         };
-        panels.push(panel);
-        if (msgId && !standaloneHiddenThink) {
-          pendingThoughtPanel = { panel, messageId: msgId };
-          messagesWithThoughtPanel.add(msgId);
-        }
+        panels.push(currentThinkPanel);
       } else if (block.type === "tool_use") {
         const toolName = (block as any).name || "unknown_tool";
         const input = (block as any).input || {};
