@@ -786,7 +786,10 @@ ${panelHtml}
       if (!tag) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
       const href = tag.getAttribute('href') || '';
-      const full = window.location.origin + window.location.pathname + window.location.search + href;
+      // Strip any existing hash and append the ref. Avoids window.location.origin,
+      // which is the string "null" for file:// URLs in Firefox.
+      const base = window.location.href.split('#')[0];
+      const full = base + href;
       navigator.clipboard.writeText(full).then(function() {
         const original = tag.textContent;
         tag.textContent = 'copied link!';
