@@ -643,9 +643,31 @@ export function groupIntoPanels(
           assistantBlockType(nextRecord) === "tool_use";
         const isShort = text.trim().length < 150;
 
-        flushMontage();
         const type = isShort && followedByTool ? "claude-think" : "claude-speech";
         const tokens = plan?.tokenOwner === "speech" ? plan.usage : {};
+
+        // If the heuristic labels this as a thought and the message already
+        // has a think panel from earlier hidden thinking, merge into it —
+        // both are the same thought, just rendered from different blocks.
+        // (The Case 2 standalone "…" panel intentionally separates hidden
+        // thinking from real speech, but inner monologue isn't speech.)
+        if (type === "claude-think" && currentThinkPanel) {
+          const lines = currentThinkPanel.lines;
+          if (lines.length > 0 && lines[lines.length - 1] === "…") {
+            lines[lines.length - 1] = "… " + text.trim();
+          } else {
+            lines.push(text.trim());
+          }
+          currentThinkPanel.lineNumbers.push(record.lineNumber);
+          // Tokens land on this panel, not a separate speech panel.
+          if (plan?.tokenOwner === "speech") {
+            currentThinkPanel.totalInputTokens = plan.usage.totalInputTokens;
+            currentThinkPanel.outputTokens = plan.usage.outputTokens;
+          }
+          continue;
+        }
+
+        flushMontage();
         currentSpeechPanel = {
           type,
           lines: [type === "claude-think" ? text.trim() : text],
