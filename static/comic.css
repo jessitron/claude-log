@@ -131,7 +131,8 @@ body {
 .notification {
   --origin-dx: 80px;
   --origin-dy: 0px;
-    padding-left: 0px;
+  /* fit nicely over the ACTION box at the beginning, and then don't weirdly wiggle on transition */
+  padding-left: 0px;
   padding-right: 0px;
   /* Incoming: fade in fast (first ~150ms) so the box is visible near its
      origin point while it's still sliding. The transform takes longer so
