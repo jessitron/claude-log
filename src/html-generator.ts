@@ -17,6 +17,38 @@ function escapeHtmlWithBold(text: string): string {
   return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
+// Render a single bubble line that may contain markdown-style fenced code
+// blocks (```...```). Code blocks render as <pre class="bubble-pre"> in a
+// monospace font so tree-drawing characters and aligned columns survive;
+// prose between fences renders as one or more <p>. With no fences, falls
+// back to a single <p> (preserving the prior behavior).
+function renderBubbleLine(text: string, withBold: boolean): string {
+  if (!text.includes("```")) {
+    const inner = withBold ? escapeHtmlWithBold(text) : escapeHtml(text);
+    return `<p>${inner}</p>`;
+  }
+  const parts = text.split("```");
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (i % 2 === 1) {
+      // Code block. Strip an optional language tag on the first line.
+      const stripped = part.replace(/^[a-zA-Z0-9_+-]*\n/, "").replace(/\n$/, "");
+      out.push(`<pre class="bubble-pre">${escapeHtml(stripped)}</pre>`);
+    } else {
+      // Prose between fences. Split on blank lines into paragraphs.
+      const paragraphs = part.split(/\n{2,}/);
+      for (const p of paragraphs) {
+        const trimmed = p.replace(/^\n+|\n+$/g, "");
+        if (!trimmed) continue;
+        const inner = withBold ? escapeHtmlWithBold(trimmed) : escapeHtml(trimmed);
+        out.push(`<p>${inner}</p>`);
+      }
+    }
+  }
+  return out.join("\n        ");
+}
+
 function sourceTag(panel: Panel): string {
   const lines = panel.lineNumbers.join(",");
   const file = panel.sourceFile || "";
@@ -73,7 +105,7 @@ function renderPanel(panel: Panel, index: number): string {
       ${tag}
       ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
       <div class="speech-bubble claude-bubble">
-        ${panel.lines.map((l) => `<p>${escapeHtmlWithBold(l)}</p>`).join("\n        ")}
+        ${panel.lines.map((l) => renderBubbleLine(l, true)).join("\n        ")}
       </div>
     </div>`;
 
@@ -83,7 +115,7 @@ function renderPanel(panel: Panel, index: number): string {
       ${tag}
       ${tokenBadge(panel.totalInputTokens, panel.outputTokens)}
       <div class="thought-bubble">
-        ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
+        ${panel.lines.map((l) => renderBubbleLine(l, false)).join("\n        ")}
       </div>
     </div>`;
 
@@ -226,6 +258,16 @@ function renderPanel(panel: Panel, index: number): string {
     <div class="panel narrator" ${attrs}>
       ${tag}
       <div class="narrator-box">
+        ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
+      </div>
+    </div>`;
+
+    case "recap":
+      return `
+    <div class="panel recap" ${attrs}>
+      ${tag}
+      <div class="recap-box">
+        <div class="recap-label">recap</div>
         ${panel.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n        ")}
       </div>
     </div>`;

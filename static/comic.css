@@ -396,6 +396,27 @@ body.show-tokens .token-badge {
   margin-bottom: 0;
 }
 
+/* Fenced code blocks inside a bubble: monospace, preformatted, scrollable
+   horizontally so tree-drawing or wide ASCII tables stay aligned without
+   stretching the bubble. */
+.bubble-pre {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 0.8rem;
+  font-style: normal;
+  line-height: 1.35;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.speech-bubble .bubble-pre:last-child,
+.thought-bubble .bubble-pre:last-child {
+  margin-bottom: 0;
+}
+
 /* === Thinking === */
 .claude-think {
   align-self: flex-end;
@@ -895,6 +916,39 @@ body.show-tokens .montage-roundtrip .token-badge {
 }
 
 .narrator-box p:last-child {
+  margin-bottom: 0;
+}
+
+/* === Recap (away_summary) === */
+.recap {
+  align-self: center;
+  max-width: 90%;
+}
+
+.recap-box {
+  background: #fff8e1;
+  border: 1px dashed #b08900;
+  border-radius: 4px;
+  padding: 10px 16px 12px;
+  color: #5a4500;
+  font-size: 0.9rem;
+  position: relative;
+}
+
+.recap-label {
+  font-family: var(--font-title);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #b08900;
+  margin-bottom: 4px;
+}
+
+.recap-box p {
+  margin-bottom: 4px;
+}
+
+.recap-box p:last-child {
   margin-bottom: 0;
 }
 

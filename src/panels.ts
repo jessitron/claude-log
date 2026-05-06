@@ -16,6 +16,7 @@ export type PanelType =
   | "action-montage"
   | "spawn-agent"
   | "narrator"
+  | "recap"
   | "notification";
 
 export interface ToolDetail {
@@ -218,8 +219,7 @@ function isInterestingSystem(record: ConversationRecord): boolean {
   if (subtype === "stop_hook_summary") return false;
   // If it has user-visible content, show it
   if (record.raw.content && typeof record.raw.content === "string") {
-    const content = record.raw.content;
-    if (content.length > 0 && content.length < 500) return true;
+    if (record.raw.content.length > 0) return true;
   }
   return false;
 }
@@ -725,12 +725,20 @@ export function groupIntoPanels(
         flushMontage();
         const content = String(record.raw.content || "");
         const subtype = record.raw.subtype as string | undefined;
-        const prefix = subtype === "api_error" ? "⚠️ API Error" : "";
-        panels.push({
-          type: "narrator",
-          lines: [prefix, truncate(content, 200)].filter(Boolean),
-          lineNumbers: [record.lineNumber],
-        });
+        if (subtype === "away_summary") {
+          panels.push({
+            type: "recap",
+            lines: [content],
+            lineNumbers: [record.lineNumber],
+          });
+        } else {
+          const prefix = subtype === "api_error" ? "⚠️ API Error" : "";
+          panels.push({
+            type: "narrator",
+            lines: [prefix, content].filter(Boolean),
+            lineNumbers: [record.lineNumber],
+          });
+        }
       }
       continue;
     }
