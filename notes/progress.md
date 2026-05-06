@@ -92,3 +92,21 @@ Jessitron noticed `netflix-traces:L30` rendered with a trailing ellipsis but the
 - `src/html-generator.ts` — added `case "recap"` rendering with `.recap-box` and a `.recap-label`
 - `static/comic.css` — `.recap` styles (amber/dashed)
 - `notes/panel-types.md` — documented the new panel type, updated narrator description
+
+## 2026-05-05: Fenced code blocks in bubbles + hidden-thinking no longer eats speech
+
+### What changed
+- Bubble text containing markdown fences (```) now renders the fenced section as `<pre class="bubble-pre">` (monospace, preserved whitespace, light tint, horizontal scroll). Prose between fences becomes `<p>` paragraphs split on blank lines. Without fences, behavior is unchanged (one `<p>` per panel line). Applied to both `claude-speech` and `claude-think`.
+- Fixed: when a message had hidden thinking ("…") followed by visible text (same `msg.id`), the thinking placeholder created a `claude-think` panel and the text *merged* into it — so a real reply got rendered as a thought bubble. Now: if hidden thinking and the same message has visible text, emit the "…" thought bubble standalone (no token badge, not pending) and let the text create its own `claude-speech` panel. Token badge stays on the speech panel since the API call is one billed turn.
+
+### Why this came up
+Jessitron pointed at `netflix-traces:L133,134` — a long markdown reply with tree-drawing characters (├──, │) and ASCII tables that collapsed in the prose font. Then `netflix-traces:L64,65` — Claude was *talking to her*, not thinking, but it rendered as a thought bubble. The two had the same root: hidden thinking + text in one message → forced into thought bubble + literal triple-backticks in body font.
+
+### Important behavior to preserve
+- Hidden thinking still gets a "…" thought bubble. She wants to see that thinking happened, just not have the speech absorbed into it.
+- Code-fence rendering uses `white-space: pre` on `.bubble-pre` (not `pre-wrap`) — wide ASCII art scrolls horizontally rather than wrapping and losing alignment. The bubble `<p>` already had `pre-wrap`, so single newlines in prose are preserved naturally.
+
+### Files touched
+- `src/html-generator.ts` — added `renderBubbleLine(text, withBold)` that splits on ``` fences; used in `claude-speech` (with bold) and `claude-think` (without)
+- `src/panels.ts` — in the hidden-thinking branch, when the message also has text, emit the "…" think panel without usage and without setting `pendingThoughtPanel`, so the upcoming text panel stands alone
+- `static/comic.css` — `.bubble-pre` rule (mono font, tint, padding, `white-space: pre`, `overflow-x: auto`)

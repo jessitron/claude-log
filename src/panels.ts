@@ -658,7 +658,13 @@ export function groupIntoPanels(
         }
 
         flushMontage();
-        const usage = msgId ? messageUsage.get(msgId) ?? {} : {};
+        // If this hidden-thinking turn also has visible text, the upcoming
+        // text panel will own the usage badge — emit a standalone "…"
+        // thought bubble (no usage, not pending) so the speech that
+        // follows stands on its own panel.
+        const content = msgId ? messageContent.get(msgId) : undefined;
+        const standaloneHiddenThink = isHidden && !!content && content.hasText;
+        const usage = msgId && !standaloneHiddenThink ? messageUsage.get(msgId) ?? {} : {};
         const panel: Panel = {
           type: "claude-think",
           lines: [visibleLine],
@@ -666,7 +672,7 @@ export function groupIntoPanels(
           ...usage,
         };
         panels.push(panel);
-        if (msgId) {
+        if (msgId && !standaloneHiddenThink) {
           pendingThoughtPanel = { panel, messageId: msgId };
           messagesWithThoughtPanel.add(msgId);
         }
